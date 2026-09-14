@@ -265,9 +265,10 @@ flowchart TD
 ### Installation
 
 ```bash
-# Build from source
-npm install
-npx -y vsce package
+# Build from source (Node.js ≥ 24)
+corepack enable   # one-time: installs the pnpm shim; the exact pnpm version is pinned by package.json's "packageManager" field
+pnpm install
+pnpm run package  # 类型检查 + 打包 + 产出 mutsumi-[version].vsix
 
 # Install locally to VS Code
 code --install-extension mutsumi-[version].vsix

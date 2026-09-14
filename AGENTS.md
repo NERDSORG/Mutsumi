@@ -307,13 +307,16 @@ debugLogger / toolsLogger 初始化
 
 ## 9. 构建与验证
 
+包管理器为 **pnpm**（`packageManager: pnpm@12.4.1`）。新环境首次构建前必须 `corepack enable`（Node ≥ 24 自带 corepack）安装 pnpm shim，否则终端与 vsce（它按 `packageManager` 字段调用 pnpm）都找不到 `pnpm` 命令。pnpm 配置集中在 `pnpm-workspace.yaml`：**`nodeLinker: hoisted`** 是为了让 vsce 的 `npm ls` 依赖分析继续工作，从而使 better-sqlite3 等 4 个原生 external 正常进入 vsix；**`allowBuilds`** 是依赖 install 脚本的白名单（pnpm ≥11 不再读 package.json 的 `pnpm` 字段）。新增带 install 脚本的原生依赖时必须把它加进 `allowBuilds`，否则 `pnpm install` 会以 `ERR_PNPM_IGNORED_BUILDS` 中止。禁止回退 npm（`#ref&path:` 等 pnpm 私有语法与 lockfile 不兼容）。
+
 ```bash
-npm run check-types   # tsc --noEmit（含 renderer tsconfig）
-node esbuild.js       # 打包（--watch 开发）
-npm run package       # 打包 + prune
+pnpm run check-types   # tsc --noEmit（含 renderer tsconfig）
+pnpm run compile       # 类型检查 + 开发打包
+node esbuild.js        # 打包（--watch 开发）
+pnpm run package       # 出 .vsix（vsce package；自动触发 prepublish = 类型检查 + production 打包）
 ```
 
-提交前必须通过：`npm run check-types`、`node esbuild.js`、`git diff --check`。
+提交前必须通过：`pnpm run check-types`、`node esbuild.js`、`git diff --check`。
 
 ---
 

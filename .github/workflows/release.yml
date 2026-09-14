@@ -12,20 +12,23 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
-      - name: Use Node.js 22.x
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
         uses: actions/setup-node@v6
         with:
-          node-version: 22.x
-          cache: npm
+          node-version: 24.x
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Check types
-        run: npm run check-types
+        run: pnpm run check-types
 
       - name: Compile
-        run: npm run compile
+        run: pnpm run compile
 
   package:
     name: Package VSIX (${{ matrix.target }})
@@ -48,14 +51,17 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
-      - name: Use Node.js 22.x
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
         uses: actions/setup-node@v6
         with:
-          node-version: 22.x
-          cache: npm
+          node-version: 24.x
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Download tree-sitter WASM files
         shell: bash
@@ -68,10 +74,10 @@ jobs:
           done
 
       - name: Compile
-        run: npm run compile
+        run: pnpm run compile
 
       - name: Package VSIX
-        run: npx -y @vscode/vsce package --target ${{ matrix.target }}
+        run: pnpm exec vsce package --target ${{ matrix.target }}
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v6
@@ -99,14 +105,17 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
-      - name: Use Node.js 22.x
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
         uses: actions/setup-node@v6
         with:
-          node-version: 22.x
-          cache: npm
+          node-version: 24.x
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Download better-sqlite3 native artifacts
         uses: actions/download-artifact@v6
@@ -134,12 +143,16 @@ jobs:
           done
 
       - name: Compile
-        run: npm run compile
+        run: pnpm run compile
 
       - name: Package Universal VSIX
-        run: npx -y @vscode/vsce package
+        run: pnpm exec vsce package
 
       - name: Install cross-platform sqlite-vec packages
+        # Kept on npm deliberately: pnpm has no --no-save, and these four
+        # os/cpu-gated packages must all be present regardless of the host
+        # platform. They are copied into the vsix below and never enter
+        # package.json or the lockfile.
         run: npm i --force --no-save sqlite-vec-darwin-arm64@0.1.7-alpha.2 sqlite-vec-linux-arm64@0.1.7-alpha.2 sqlite-vec-linux-x64@0.1.7-alpha.2 sqlite-vec-windows-x64@0.1.7-alpha.2
 
       - name: Inject cross-platform sqlite-vec packages and dedupe better-sqlite3
@@ -155,7 +168,7 @@ jobs:
           # Remove duplicated better-sqlite3 binary: the linux-x64 build is already
           # shipped as native/better-sqlite3/better_sqlite3-linux-x64.node and is
           # loaded at runtime via the nativeBinding option, so the copy installed
-          # by npm ci under node_modules is redundant in the universal package.
+          # under node_modules is redundant in the universal package.
           echo "Removing duplicate linux-x64 better_sqlite3.node from node_modules"
           rm -f "vsix-unpacked/extension/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
           cd vsix-unpacked

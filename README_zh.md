@@ -265,9 +265,10 @@ flowchart TD
 ### 安装
 
 ```bash
-# 从源码构建
-npm install
-npx -y vsce package
+# 从源码构建（Node.js ≥ 24）
+corepack enable   # 仅需一次：安装 pnpm shim；pnpm 确切版本由 package.json 的 "packageManager" 字段锁定
+pnpm install
+pnpm run package  # 类型检查 + 打包 + 产出 mutsumi-【版本号】.vsix
 
 # 本地安装到 VS Code
 code --install-extension mutsumi-【版本号】.vsix
