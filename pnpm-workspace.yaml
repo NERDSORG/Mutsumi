@@ -1,0 +1,11 @@
+# pnpm settings (pnpm >= 11 reads package-manager config from this file, not package.json's "pnpm" field)
+nodeLinker: hoisted # keep vsce's `npm ls` dependency analysis working so native externals ship in the vsix
+
+# Build-script approvals. true = run install scripts; false = recorded as intentionally denied.
+allowBuilds:
+    better-sqlite3: true # native binding build (prebuild-install / node-gyp)
+    electron: true # downloads the Electron binary used by @electron/rebuild
+    esbuild: true # binary presence check
+    lzma-native: true # native binding build
+    '@vscode/vsce-sign': true # downloads the extension-signing binary (vsce package)
+    keytar: true # native keyring binding (vsce publish credential store)

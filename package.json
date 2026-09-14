@@ -535,24 +535,66 @@
                             {
                                 "type": "object",
                                 "properties": {
-                                    "type": { "const": "stdio" },
-                                    "command": { "type": "string", "minLength": 1 },
-                                    "args": { "type": "array", "items": { "type": "string" } },
-                                    "cwd": { "type": "string" },
-                                    "env": { "type": "object", "additionalProperties": { "type": ["string", "number"] } },
-                                    "timeout": { "type": "number", "exclusiveMinimum": 0 }
+                                    "type": {
+                                        "const": "stdio"
+                                    },
+                                    "command": {
+                                        "type": "string",
+                                        "minLength": 1
+                                    },
+                                    "args": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "cwd": {
+                                        "type": "string"
+                                    },
+                                    "env": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": [
+                                                "string",
+                                                "number"
+                                            ]
+                                        }
+                                    },
+                                    "timeout": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0
+                                    }
                                 },
-                                "required": ["type", "command"]
+                                "required": [
+                                    "type",
+                                    "command"
+                                ]
                             },
                             {
                                 "type": "object",
                                 "properties": {
-                                    "type": { "const": "http" },
-                                    "url": { "type": "string", "format": "uri" },
-                                    "headers": { "type": "object", "additionalProperties": { "type": "string" } },
-                                    "timeout": { "type": "number", "exclusiveMinimum": 0 }
+                                    "type": {
+                                        "const": "http"
+                                    },
+                                    "url": {
+                                        "type": "string",
+                                        "format": "uri"
+                                    },
+                                    "headers": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "timeout": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0
+                                    }
                                 },
-                                "required": ["type", "url"]
+                                "required": [
+                                    "type",
+                                    "url"
+                                ]
                             }
                         ]
                     }
@@ -635,24 +677,26 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run package",
-        "compile": "npm run check-types && node esbuild.js",
-        "check-types": "npx tsc --noEmit && npx tsc --noEmit -p tsconfig.renderer.json",
+        "vscode:prepublish": "pnpm run check-types && node esbuild.js --production",
+        "compile": "pnpm run check-types && node esbuild.js",
+        "check-types": "pnpm exec tsc --noEmit && pnpm exec tsc --noEmit -p tsconfig.renderer.json",
         "watch": "npm-run-all -p watch:*",
         "watch:esbuild": "node esbuild.js --watch",
-        "watch:tsc": "npx tsc --noEmit --watch",
-        "package": "npm run check-types && node esbuild.js --production && npm prune --production",
-        "package-local": "vsce package && npm install"
+        "watch:tsc": "pnpm exec tsc --noEmit --watch",
+        "package": "pnpm exec vsce package"
     },
+    "packageManager": "pnpm@12.4.1",
     "devDependencies": {
         "@electron/rebuild": "^4.0.3",
+        "@modelcontextprotocol/sdk": "^1.30.0",
         "@types/better-sqlite3": "^7.6.13",
         "@types/diff": "^8.0.0",
         "@types/express": "^5.0.6",
-        "@types/node": "^18.0.0",
+        "@types/node": "^24.13.4",
         "@types/node-notifier": "^8.0.5",
         "@types/uuid": "^9.0.8",
         "@types/vscode": "^1.108.1",
+        "@vscode/vsce": "^3.6.0",
         "body-parser": "^2.2.2",
         "diff": "^8.0.3",
         "electron": "^39.0.0",
@@ -665,7 +709,6 @@
         "lowlight": "^3.3.0",
         "micromark": "^4.0.0",
         "micromark-extension-gfm": "^2.0.0",
-        "@modelcontextprotocol/sdk": "^1.30.0",
         "npm-run-all": "^4.1.5",
         "openai": "^6.17.0",
         "partial-json": "^0.1.7",
@@ -678,11 +721,5 @@
         "node-notifier": "^10.0.1",
         "sqlite-vec": "^0.1.7-alpha.2",
         "web-tree-sitter": "^0.22.2"
-    },
-    "allowScripts": {
-        "better-sqlite3": true,
-        "electron": true,
-        "esbuild": true,
-        "lzma-native": true
     }
 }

@@ -15,17 +15,20 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
-      - name: Use Node.js 22.x
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 24.x
         uses: actions/setup-node@v6
         with:
-          node-version: 22.x
-          cache: npm
+          node-version: 24.x
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Check types
-        run: npm run check-types
+        run: pnpm run check-types
 
       - name: Compile
-        run: npm run compile
+        run: pnpm run compile
