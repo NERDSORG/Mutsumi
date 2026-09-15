@@ -9,3 +9,5 @@ allowBuilds:
     lzma-native: true # native binding build
     '@vscode/vsce-sign': true # downloads the extension-signing binary (vsce package)
     keytar: true # native keyring binding (vsce publish credential store)
+    '@google/genai': false # pure-JS SDK bundled by esbuild; its install script is not needed
+    protobufjs: false # codegen postinstall is unnecessary for the prebuilt runtime we bundle

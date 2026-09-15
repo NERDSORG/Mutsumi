@@ -9,7 +9,7 @@ import {
   VecMatchRow,
   ChunkDetailRow
 } from "./interfaces"
-import Database = require("better-sqlite3");
+import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import { TaskQueue } from "./taskQueue";
 import { sha256, f32buf, mkChunk, lineChunks } from "./utils";
