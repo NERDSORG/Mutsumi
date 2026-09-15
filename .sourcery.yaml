@@ -1,0 +1,4 @@
+ignore:
+  - pnpm-lock.yaml
+  - "*.lock"
+  - node_modules
