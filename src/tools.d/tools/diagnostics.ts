@@ -6,17 +6,14 @@ import * as path from 'path';
 export const getWarningErrorTool: ITool = {
     name: 'diagnostics',
     definition: {
-        type: 'function',
-        function: {
-            name: 'diagnostics',
-            description: 'Retrieve warnings and errors (diagnostics) for the entire workspace, a specific directory, or a specific file.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    uri: { 
-                        type: 'string', 
-                        description: 'Optional. The target file or directory URI/path. If empty or omitted, returns diagnostics for the entire workspace.' 
-                    }
+        name: 'diagnostics',
+        description: 'Retrieve warnings and errors (diagnostics) for the entire workspace, a specific directory, or a specific file.',
+        parameters: {
+            type: 'object',
+            properties: {
+                uri: { 
+                    type: 'string', 
+                    description: 'Optional. The target file or directory URI/path. If empty or omitted, returns diagnostics for the entire workspace.' 
                 }
             }
         }

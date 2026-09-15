@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { AgentMessage, AgentMetadata } from '../../types';
 import { createUserMessage, extractText } from '@moonshot-ai/kosong';
+import type { ProviderType } from '@moonshot-ai/kosong';
 import { LiteAdapter, LiteAgentSessionConfig } from '../../adapters/liteAdapter';
 import { buildInteractionHistory } from '../../contextManagement/history';
 import { createEmptyToolSet } from '../../tools.d/toolManager';
@@ -77,14 +78,14 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
                 const compressModel = compressSelection.model;
                 const compressProvider = compressSelection.provider;
 
-                let credentials: { apiKey: string; baseUrl: string };
+                let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
                 try {
                     credentials = getModelCredentials(compressModel, compressProvider);
                 } catch (err: any) {
                     vscode.window.showErrorMessage(t('compress.failed', err.message));
                     return;
                 }
-                const { apiKey, baseUrl } = credentials;
+                const { apiKey, baseUrl, providerType } = credentials;
 
                 // Build session and get full interaction history
                 const session = await createDebugSessionFromNotebook(editor.notebook, lastCodeCellIndex);
@@ -147,6 +148,7 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
                         model: compressModel,
                         apiKey,
                         baseUrl,
+                        providerType,
                         maxLoops: 1 // Single round since no tools
                     };
                     const runner = new AgentRunner(runOptions, emptyToolSet, compressSession);

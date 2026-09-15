@@ -5,17 +5,14 @@ import { formatShellOutput } from '../shell/shellTask';
 export const killShellTaskTool: ITool = {
     name: 'kill_shell_task',
     definition: {
-        type: 'function',
-        function: {
-            name: 'kill_shell_task',
-            description: 'Terminate a background shell task. Stops the underlying process (SIGTERM), collects its current full output, and removes (consumes) the task from the registry. Returns the collected output prefixed with a termination notice.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    task_id: { type: 'string', description: 'The task id returned by a background shell call.' }
-                },
-                required: ['task_id']
-            }
+        name: 'kill_shell_task',
+        description: 'Terminate a background shell task. Stops the underlying process (SIGTERM), collects its current full output, and removes (consumes) the task from the registry. Returns the collected output prefixed with a termination notice.',
+        parameters: {
+            type: 'object',
+            properties: {
+                task_id: { type: 'string', description: 'The task id returned by a background shell call.' }
+            },
+            required: ['task_id']
         }
     },
     execute: async (args: any) => {

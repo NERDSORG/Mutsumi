@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { AgentMessage, AgentMetadata, ModelSelection } from '../types';
 import { createUserMessage, extractText } from '@moonshot-ai/kosong';
-import { LLMClient, LLMClientConfig } from './llmClient';
+import type { ProviderType } from '@moonshot-ai/kosong';
 import { AgentOrchestrator } from './agentOrchestrator';
 import { IAgentSession } from '../adapters/interfaces';
 import { LiteAdapter } from '../adapters/liteAdapter';
@@ -90,17 +90,32 @@ function createTitleGenerationMessages(messages: AgentMessage[]): AgentMessage[]
 }
 
 /**
+ * Self-contained configuration for a title generation run.
+ * @interface GenerateTitleConfig
+ */
+export interface GenerateTitleConfig {
+    /** API key for the resolved provider */
+    apiKey: string;
+    /** Base URL for the provider's API */
+    baseUrl: string | undefined;
+    /** Model identifier to use */
+    model: string;
+    /** Wire protocol type of the resolved provider */
+    providerType: ProviderType;
+}
+
+/**
  * Generates a concise title using an AgentRunner with LiteAdapter and no tools.
  * @description Uses the standard AgentRunner infrastructure with an empty tool set,
  * ensuring single-round execution (since no tools are available).
  * @param {AgentMessage[]} messages - Conversation message history
- * @param {LLMClientConfig} config - LLM client configuration
+ * @param {GenerateTitleConfig} config - Title generation configuration
  * @param {AgentMetadata} [sourceMetadata] - Optional source metadata to copy (includes agentType and contextItems)
  * @returns {Promise<string>} Generated title string
  */
 export async function generateTitle(
     messages: AgentMessage[],
-    config: LLMClientConfig,
+    config: GenerateTitleConfig,
     sourceMetadata?: AgentMetadata
 ): Promise<string> {
     // Dynamically import AgentRunner to avoid circular dependency
@@ -125,6 +140,7 @@ export async function generateTitle(
         model: config.model,
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
+        providerType: config.providerType,
         maxLoops: 1 // Extra safety: limit to 1 loop
     };
 
@@ -253,7 +269,7 @@ export class TitleGenerator {
 
         const modelSelection = config.modelSelection!;
 
-        let credentials: { apiKey: string; baseUrl: string };
+        let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
         try {
             credentials = getModelCredentials(modelSelection.model, modelSelection.provider);
         } catch (err: any) {
@@ -267,7 +283,8 @@ export class TitleGenerator {
             const title = await generateTitle(messages, {
                 apiKey: credentials.apiKey,
                 baseUrl: credentials.baseUrl,
-                model: modelSelection.model
+                model: modelSelection.model,
+                providerType: credentials.providerType
             }, sourceMetadata);
 
             await session.updateTitle(title);
@@ -308,7 +325,7 @@ export async function regenerateTitleForSession(
     // Validate the pair through the gate before use.
     resolveModelSelection(modelSelection);
 
-    let credentials: { apiKey: string; baseUrl: string };
+    let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
     try {
         credentials = getModelCredentials(modelSelection.model, modelSelection.provider);
     } catch (err: any) {
@@ -320,7 +337,8 @@ export async function regenerateTitleForSession(
     const title = await generateTitle(messages, {
         apiKey: credentials.apiKey,
         baseUrl: credentials.baseUrl,
-        model: modelSelection.model
+        model: modelSelection.model,
+        providerType: credentials.providerType
     }, sourceMetadata);
 
     await session.updateTitle(title);

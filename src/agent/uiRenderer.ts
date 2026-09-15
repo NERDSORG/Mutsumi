@@ -7,7 +7,23 @@
 
 import { RenderBlock, RenderData } from '../notebook/renderTypes';
 import { tryParsePartialJson } from './utils';
+import type { ToolCall } from '@moonshot-ai/kosong';
 import type { ToolSet } from '../tools.d/toolManager';
+
+/**
+ * Point-in-time render state captured at round start.
+ * @description Used by the retry loop to roll the UI back so a retried
+ * attempt renders as if the previous attempt never happened.
+ * @interface RoundSnapshot
+ */
+export interface RoundSnapshot {
+    /** Length of the committed block list at snapshot time */
+    committedLength: number;
+    /** L2 lock state at snapshot time */
+    reasoningLocked: boolean;
+    /** L2 lock state at snapshot time */
+    contentLocked: boolean;
+}
 
 /**
  * Accumulates agent output as structured render blocks.
@@ -109,6 +125,38 @@ export class UIRenderer {
     }
 
     /**
+     * Captures the render state at round start for round-level rollback.
+     * @description Called before each streamed generation round; pair with
+     * {@link rollbackRound} on retry attempts.
+     * @returns {RoundSnapshot} Snapshot of committed length and L2 lock state
+     */
+    snapshotRound(): RoundSnapshot {
+        return {
+            committedLength: this.committedBlocks.length,
+            reasoningLocked: this.reasoningLocked,
+            contentLocked: this.contentLocked
+        };
+    }
+
+    /**
+     * Rolls the renderer back to a snapshot taken at round start.
+     * @description Truncates committed blocks back to the snapshot and resets
+     * the L2 locks and active area, so after rollback the render state is
+     * equivalent to "this round never started". Required by the retry loop:
+     * L2 may have permanently committed attempt-N partial reasoning/content
+     * before the stream failed (see updateActive).
+     * @param {RoundSnapshot} snapshot - Snapshot from {@link snapshotRound}
+     */
+    rollbackRound(snapshot: RoundSnapshot): void {
+        this.committedBlocks.length = snapshot.committedLength;
+        this.reasoningLocked = snapshot.reasoningLocked;
+        this.contentLocked = snapshot.contentLocked;
+        this.activeReasoning = '';
+        this.activeContent = '';
+        this.activeTools = [];
+    }
+
+    /**
      * Formats a tool call as a structured RenderBlock.
      * @description Argument separation (regular args vs code-block args) is deferred
      * to the renderer via renderingConfig; no HTML is generated here.
@@ -144,13 +192,13 @@ export class UIRenderer {
      * Formats pending (streaming) tool calls as RenderBlocks.
      * @description Iterates through partial tool calls, best-effort parses their
      * arguments, and looks up pretty print summaries and rendering configs.
-     * @param {any[]} partialToolCalls - Partial tool call objects from the stream
+     * @param {ToolCall[]} partialToolCalls - Partial tool calls in kosong flat shape
      * @param {ToolSet} toolSet - Tool set instance for looking up tool metadata
      * @param {boolean} _isSubAgent - Whether the caller is a sub-agent session
      * @returns {RenderBlock[]} Pending tool call blocks
      */
     formatPendingToolCalls(
-        partialToolCalls: any[] | undefined,
+        partialToolCalls: ToolCall[] | undefined,
         toolSet: ToolSet,
         _isSubAgent?: boolean
     ): RenderBlock[] {
@@ -159,12 +207,11 @@ export class UIRenderer {
         }
         const blocks: RenderBlock[] = [];
         for (const ptc of partialToolCalls) {
-            const toolName = ptc.function?.name;
-            if (!toolName) { continue; }
-            const args = tryParsePartialJson(ptc.function?.arguments);
-            const summary = toolSet.getPrettyPrint(toolName, args);
-            const config = toolSet.getRenderingConfig(toolName);
-            blocks.push(this.formatToolCall(toolName, args, summary, true, undefined, config));
+            if (!ptc.name) { continue; }
+            const args = tryParsePartialJson(ptc.arguments ?? '');
+            const summary = toolSet.getPrettyPrint(ptc.name, args);
+            const config = toolSet.getRenderingConfig(ptc.name);
+            blocks.push(this.formatToolCall(ptc.name, args, summary, true, undefined, config));
         }
         return blocks;
     }

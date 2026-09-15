@@ -7,25 +7,22 @@ import { TextDecoder } from 'util';
 export const editFileSearchReplaceTool: ITool = {
     name: 'edit',
     definition: {
-        type: 'function',
-        function: {
-            name: 'edit',
-            description: 'Replace parts of a file using search and replace. The search_replace parameter specifies the content to be replaced, and new_content specifies the replacement content.',
-            parameters: {
-                type: 'object',
-                properties: { 
-                    uri: { type: 'string' }, 
-                    search_replace: { 
-                        type: 'string',
-                        description: 'The content to search for and replace in the file.'
-                    },
-                    new_content: {
-                        type: 'string',
-                        description: 'The new content to replace the search content with.'
-                    }
+        name: 'edit',
+        description: 'Replace parts of a file using search and replace. The search_replace parameter specifies the content to be replaced, and new_content specifies the replacement content.',
+        parameters: {
+            type: 'object',
+            properties: { 
+                uri: { type: 'string' }, 
+                search_replace: { 
+                    type: 'string',
+                    description: 'The content to search for and replace in the file.'
                 },
-                required: ['uri', 'search_replace', 'new_content']
-            }
+                new_content: {
+                    type: 'string',
+                    description: 'The new content to replace the search content with.'
+                }
+            },
+            required: ['uri', 'search_replace', 'new_content']
         }
     },
     execute: async (args: any, context: ToolContext) => {

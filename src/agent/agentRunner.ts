@@ -6,17 +6,18 @@
 import * as vscode from 'vscode';
 import { ToolSet } from '../tools.d/toolManager';
 import { AgentMessage } from '../types';
-import type { ContentPart, ToolCall } from '@moonshot-ai/kosong';
+import { createProvider, extractText, isAbortError } from '@moonshot-ai/kosong';
+import type { ChatProvider, Message, ProviderConfig } from '@moonshot-ai/kosong';
 import { UIRenderer } from './uiRenderer';
 import { MUTSUMI_AGENT_CHAT_MIME, RenderBlock } from '../notebook/renderTypes';
-import { LLMStreamHandler } from './llmStream';
+import { streamGenerate } from './generateStream';
+import type { StreamGenerateResult } from './generateStream';
 import { ToolExecutor } from './toolExecutor';
 import { TitleGenerator } from './titleGenerator';
-import { LLMClient } from './llmClient';
 import { IAgentSession, AgentSessionConfig } from '../adapters/interfaces';
 import { LiteAgentSession } from '../adapters/liteAdapter';
 import { debugLogger } from '../debugLogger';
-import { getModelCredentials, getTitleModelSelection } from '../utils';
+import { getTitleModelSelection } from '../utils';
 import { AgentRunOptions } from './types';
 import { t } from '../i18n';
 
@@ -36,14 +37,12 @@ export class AgentRunner {
     private maxLoops: number;
     /** UI renderer for notebook output */
     private uiRenderer: UIRenderer;
-    /** LLM streaming handler */
-    private llmStreamHandler: LLMStreamHandler;
+    /** kosong chat provider for API communication */
+    private provider: ChatProvider;
     /** Tool executor for handling tool calls */
     private toolExecutor: ToolExecutor | undefined;
     /** Title generator for notebook titles */
     private titleGenerator: TitleGenerator;
-    /** LLM client for API communication */
-    private llmClient: LLMClient;
     /** Agent session for UI interactions */
     private session: IAgentSession;
     /** Tool set for this agent instance */
@@ -64,15 +63,36 @@ export class AgentRunner {
         this.session = session;
         this.toolSet = toolSet;
         this.maxLoops = options.maxLoops || 30;
-        this.llmClient = new LLMClient({
+        // One provider per runner instance, reused for the whole run: the
+        // ReasoningKeyDialect learning is meant to be shared across rounds.
+        this.provider = createProvider({
+            type: options.providerType,
+            model: options.model,
             apiKey: options.apiKey,
             baseUrl: options.baseUrl,
-            model: options.model,
-            defaultHeaders: { 'User-Agent': 'KimiCLI/1.30.0' },
-            reasoningEffort: options.reasoningEffort
-        });
+            defaultHeaders: { 'User-Agent': 'KimiCLI/1.30.0' }
+        } as ProviderConfig);
+
+        // reasoning_effort → withThinking mapping (frozen contract):
+        // - 'none' → withThinking('off') (the only value translation)
+        // - other concrete values → passed through verbatim
+        // - default (undefined) on the openai wire → withThinking('off'):
+        //   suppresses the adapter's auto-enable (it would otherwise send
+        //   reasoning_effort='medium' once history contains think parts);
+        //   without a configured offEffort this sends NO field on the wire —
+        //   byte-equivalent to the previous "default sends nothing" behavior.
+        // - default on other wires → no morph (server-side default; on kimi
+        //   withThinking('off') would actively send thinking=disabled, which
+        //   is "off", not "default", so it must not be used for suppression).
+        const effort = options.reasoningEffort;
+        if (effort === 'none') {
+            this.provider = this.provider.withThinking('off');
+        } else if (effort !== undefined) {
+            this.provider = this.provider.withThinking(effort);
+        } else if (options.providerType === 'openai') {
+            this.provider = this.provider.withThinking('off');
+        }
         this.uiRenderer = new UIRenderer();
-        this.llmStreamHandler = new LLMStreamHandler(this.llmClient);
         // ToolExecutor will be initialized in run() after we can await getConfig()
         this.titleGenerator = new TitleGenerator();
     }
@@ -118,39 +138,53 @@ export class AgentRunner {
             }
             loopCount++;
 
-            let roundContent = '';
-            let roundReasoning = '';
-            let toolCalls: ToolCall[] = [];
+            // Send-boundary system extraction: strip ALL system messages
+            // (normally just the first one) into the dedicated systemPrompt
+            // parameter; the rest stays as history in original order.
+            const systemTexts: string[] = [];
+            const history: Message[] = [];
+            for (const msg of messages) {
+                if (msg.role === 'system') {
+                    systemTexts.push(extractText(msg));
+                } else {
+                    history.push(msg);
+                }
+            }
+            const systemPrompt = systemTexts.join('\n\n');
 
+            // Snapshot the renderer at round start so a retry attempt can
+            // roll the UI back to "this round never started".
+            const roundSnapshot = this.uiRenderer.snapshotRound();
+
+            let roundResult: StreamGenerateResult;
             try {
-                const result = await this.llmStreamHandler.streamResponse(
-                    messages,
-                    this.toolSet.getDefinitions(),
-                    abortController.signal,
-                    async (content, reasoning, partialToolCalls) => {
+                roundResult = await streamGenerate({
+                    provider: this.provider,
+                    systemPrompt,
+                    history,
+                    tools: this.toolSet.getDefinitions(),
+                    signal: abortController.signal,
+                    onRetry: () => {
+                        this.uiRenderer.rollbackRound(roundSnapshot);
+                    },
+                    onProgress: async (content, reasoning, pendingTools) => {
                         if (this.session.token.isCancellationRequested) {
                             return;
                         }
 
-                        const pendingTools = this.uiRenderer.formatPendingToolCalls(
-                            partialToolCalls,
+                        const pendingBlocks = this.uiRenderer.formatPendingToolCalls(
+                            pendingTools,
                             this.toolSet,
                             isSubAgent
                         );
 
-                        const renderData = this.uiRenderer.updateActive(content, reasoning, pendingTools);
+                        const renderData = this.uiRenderer.updateActive(content, reasoning, pendingBlocks);
                         await this.session.replaceOutput(JSON.stringify(renderData), { mimeType: MUTSUMI_AGENT_CHAT_MIME });
                     }
-                );
-                roundContent = result.roundContent;
-                roundReasoning = result.roundReasoning;
-                toolCalls = result.toolCalls;
+                });
             } catch (error: any) {
                 // Handle network/API errors gracefully
-                const isCancellation = 
-                    error.name === 'APIUserAbortError' ||
-                    error.name === 'AbortError' ||
-                    abortController.signal.aborted;
+                const isCancellation = isAbortError(error) || abortController.signal.aborted;
 
                 if (isCancellation) {
                     // User-initiated cancellation, just end gracefully
@@ -160,7 +194,7 @@ export class AgentRunner {
                 // Network/API error - show notification and preserve history
                 const errorMessage = error.message || String(error);
                 console.error('LLM Stream Error:', error);
-                
+
                 // Show error as VSCode notification (non-modal)
                 const copyDetailsBtn = t('controller.copyDetails');
                 vscode.window.showErrorMessage(
@@ -179,44 +213,25 @@ export class AgentRunner {
                 break;
             }
 
-            // Assemble kosong content parts: think part first, then text part.
-            // Empty content normalizes to [].
-            const roundParts: ContentPart[] = [];
-            if (roundReasoning) {
-                roundParts.push({ type: 'think', think: roundReasoning });
-            }
-            if (roundContent) {
-                roundParts.push({ type: 'text', text: roundContent });
+            if (roundResult.traceId) {
+                debugLogger.log(`[AgentRunner] traceId: ${roundResult.traceId}`);
             }
 
-            if (!toolCalls.length && !roundContent && !roundReasoning) {
-                this.uiRenderer.appendBlock({ type: 'content', markdown: '_Mutsumi Debug: No content, reasoning, or tool calls received from API._' });
-                await this.session.replaceOutput(JSON.stringify(this.uiRenderer.getCommittedRenderData()), { mimeType: MUTSUMI_AGENT_CHAT_MIME });
-                const msg: AgentMessage = { role: 'assistant', content: roundParts, toolCalls: [] };
-                messages.push(msg);
-                newMessages.push(msg);
+            // The kosong-assembled message is the sole history source (think
+            // parts with encrypted signatures included; the display
+            // accumulators never feed history).
+            const assistantMsg: AgentMessage = roundResult.message;
+            messages.push(assistantMsg);
+            newMessages.push(assistantMsg);
+
+            if (assistantMsg.toolCalls.length === 0) {
                 break;
             }
 
-            if (toolCalls.length === 0) {
-                const assistantMsg: AgentMessage = { role: 'assistant', content: roundParts, toolCalls: [] };
-                messages.push(assistantMsg);
-                newMessages.push(assistantMsg);
-                break;
-            }
-
-            const assistantMsgWithTool: AgentMessage = {
-                role: 'assistant',
-                content: roundParts,
-                toolCalls
-            };
-            messages.push(assistantMsgWithTool);
-            newMessages.push(assistantMsgWithTool);
-
-            this.uiRenderer.commitRoundUI(roundContent, roundReasoning);
+            this.uiRenderer.commitRoundUI(roundResult.roundContent, roundResult.roundReasoning);
 
             const result = await this.toolExecutor.executeTools(
-                toolCalls,
+                assistantMsg.toolCalls,
                 abortController.signal,
                 {
                     appendOutput: async (block: RenderBlock) => {

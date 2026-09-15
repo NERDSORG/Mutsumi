@@ -35,22 +35,19 @@ function formatPosixPermissions(mode: number): string {
 export const globTool: ITool = {
 	name: "glob",
 	definition: {
-		type: "function",
-		function: {
-			name: "glob",
-			description:
-				"Get file system entry metadata. Accepts both file and directory URIs — for a file, returns its size in KB; for a directory, lists all entries with type, (for files) size, and (on POSIX) permission bits. **CRITICAL**: Use this BEFORE reading or editing files to check sizes and decide whether to use partial read/search or full read/replace, to save tokens.",
-			parameters: {
-				type: "object",
-				properties: {
-					uri: {
-						type: "string",
-						description:
-							"The file or directory URI to inspect.",
-					},
+		name: "glob",
+		description:
+			"Get file system entry metadata. Accepts both file and directory URIs — for a file, returns its size in KB; for a directory, lists all entries with type, (for files) size, and (on POSIX) permission bits. **CRITICAL**: Use this BEFORE reading or editing files to check sizes and decide whether to use partial read/search or full read/replace, to save tokens.",
+		parameters: {
+			type: "object",
+			properties: {
+				uri: {
+					type: "string",
+					description:
+						"The file or directory URI to inspect.",
 				},
-				required: ["uri"],
 			},
+			required: ["uri"],
 		},
 	},
 	execute: async (args: any, context: ToolContext) => {
