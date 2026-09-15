@@ -1,4 +1,4 @@
-import type OpenAI from "openai";
+import type { Tool as KosongTool } from "@moonshot-ai/kosong";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { ITool, ToolContext } from "../tools.d/interface";
 import type { McpToolCaller } from "./interfaces";
@@ -9,7 +9,7 @@ import { getMcpToolExposedName, getMcpToolSchemaError, projectMcpToolResult } fr
 export class McpToolAdapter implements ITool {
 	readonly name: string;
 	readonly shouldCache = false;
-	readonly definition: OpenAI.Chat.ChatCompletionTool;
+	readonly definition: KosongTool;
 
 	readonly serverId: string;
 	readonly originalToolName: string;
@@ -27,12 +27,9 @@ export class McpToolAdapter implements ITool {
 		if (schemaError) throw new Error(`MCP tool ${serverId}/${this.originalToolName} cannot be exposed: ${schemaError}`);
 		this.name = getMcpToolExposedName(serverId, this.originalToolName);
 		this.definition = {
-			type: "function",
-			function: {
-				name: this.name,
-				description: this.tool.description || `${serverId}: ${this.originalToolName}`,
-				parameters: this.tool.inputSchema,
-			},
+			name: this.name,
+			description: this.tool.description || `${serverId}: ${this.originalToolName}`,
+			parameters: this.tool.inputSchema as Record<string, unknown>,
 		};
 	}
 

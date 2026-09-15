@@ -184,7 +184,9 @@ export class AgentFileOperations {
         // Determine name and context based on prompt
         const hasPrompt = prompt && prompt.trim().length > 0;
         const agentName = hasPrompt ? prompt!.slice(0, 20) + '...' : 'New Agent';
-        const context = hasPrompt ? [{ role: 'user', content: prompt }] : [];
+        const context = hasPrompt
+            ? [{ role: 'user', content: [{ type: 'text', text: prompt }], toolCalls: [] }]
+            : [];
 
         // Inject ROLE macro based on agentType (user could override later)
         contextItems = contextItems ?? [];
@@ -204,6 +206,7 @@ export class AgentFileOperations {
                 is_task_finished: false,
                 model: resolvedSelection.model,
                 provider: resolvedSelection.provider,
+                mtm_version: 2,  // Format marker for future migrators (write-only)
                 sub_agents_list: [],  // New agent starts with empty sub-agent list
                 contextItems: contextItems,
                 activeRules: defaults.rules,

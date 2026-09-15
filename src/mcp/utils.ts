@@ -53,7 +53,7 @@ export function normalizeMcpToolSelections(value: unknown): McpToolSelection[] {
 	return [...selections].map(([serverId, toolNames]) => ({ serverId, toolNames }));
 }
 
-/** Validates the JSON Schema subset required by OpenAI function parameters. */
+/** Validates the JSON Schema subset required for model-facing tool parameters (object-typed JSON Schema, accepted by every provider wire). */
 export function getMcpToolSchemaError(tool: Tool): string | undefined {
 	const schema = tool.inputSchema;
 	if (!schema || typeof schema !== "object" || Array.isArray(schema) || schema.type !== "object") {

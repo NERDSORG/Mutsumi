@@ -4,18 +4,15 @@ import { handleEdit } from '../edit_file';
 export const createOrReplaceTool: ITool = {
     name: 'write',
     definition: {
-        type: 'function',
-        function: {
-            name: 'write',
-            description: 'Replace the full content of a file. Shows a diff view to the user for confirmation. If the file does not exist, creates a new file.',
-            parameters: {
-                type: 'object',
-                properties: { 
-                    uri: { type: 'string' }, 
-                    new_content: { type: 'string' } 
-                },
-                required: ['uri', 'new_content']
-            }
+        name: 'write',
+        description: 'Replace the full content of a file. Shows a diff view to the user for confirmation. If the file does not exist, creates a new file.',
+        parameters: {
+            type: 'object',
+            properties: { 
+                uri: { type: 'string' }, 
+                new_content: { type: 'string' } 
+            },
+            required: ['uri', 'new_content']
         }
     },
     execute: async (args: any, context: ToolContext) => {

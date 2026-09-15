@@ -6,22 +6,19 @@ import * as vscode from 'vscode';
 export const inspectShellTaskTool: ITool = {
     name: 'inspect_shell_task',
     definition: {
-        type: 'function',
-        function: {
-            name: 'inspect_shell_task',
-            description: 'Inspect a background shell task and retrieve its output. If the task is still running, returns a snapshot without removing it. If the task has exited, returns the full output and consumes (removes) the task from the registry. Optional wait_for parameter waits in the foreground for the specified number of seconds before returning.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    task_id: { type: 'string', description: 'The task id returned by a background shell call.' },
-                    wait_for: {
-                        type: 'number',
-                        description: 'Optional. Seconds to wait in the foreground for the task to exit before returning. 0 or omitted means no foreground wait. -1 means waiting for the default shell sync timeout.'
-                        // Other negative values are also allowed for the tool's success rate and compatibility
-                    }
-                },
-                required: ['task_id']
-            }
+        name: 'inspect_shell_task',
+        description: 'Inspect a background shell task and retrieve its output. If the task is still running, returns a snapshot without removing it. If the task has exited, returns the full output and consumes (removes) the task from the registry. Optional wait_for parameter waits in the foreground for the specified number of seconds before returning.',
+        parameters: {
+            type: 'object',
+            properties: {
+                task_id: { type: 'string', description: 'The task id returned by a background shell call.' },
+                wait_for: {
+                    type: 'number',
+                    description: 'Optional. Seconds to wait in the foreground for the task to exit before returning. 0 or omitted means no foreground wait. -1 means waiting for the default shell sync timeout.'
+                    // Other negative values are also allowed for the tool's success rate and compatibility
+                }
+            },
+            required: ['task_id']
         }
     },
     execute: async (args: any) => {

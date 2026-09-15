@@ -8,61 +8,58 @@ const MAX_FILES_TO_GREP = 1000;
 export const grepTool: ITool = {
 	name: "grep",
 	definition: {
-		type: "function",
-		function: {
-			name: "grep",
-			description:
-				'Search for a pattern in a file or directory. By default the keyword is interpreted as an ECMAScript regular expression (like `grep -E`). Use `regex: false` to search for the exact literal text. Supports case-insensitive, whole-word, and inverted matching. For directories, recursively searches all files (ignoring common patterns, skipping binary files, truncating long lines). For files, returns matching lines with optional context. Output format: "path:line:content".',
-			parameters: {
-				type: "object",
-				properties: {
-					uri: {
-						type: "string",
-						description:
-							"The file or directory URI to search in.",
-					},
-					keyword: {
-						type: "string",
-						description:
-							'The search pattern. By default treated as an ECMAScript regular expression (like `grep -E`). Set `regex: false` to search for the exact literal text. Supported regex features: `.`, `*`, `+`, `?`, `^`, `$`, `|`, `[...]`, `\\b`, `(?:...)`, character classes, and quantifiers. Lookaround, back-references, and PCRE-only syntax are not supported.',
-					},
-					regex: {
-						type: "boolean",
-						default: true,
-						description:
-							"If true (default), the keyword is treated as an ECMAScript regular expression. If false, the keyword is matched as a literal string.",
-					},
-					case_insensitive: {
-						type: "boolean",
-						default: false,
-						description:
-							"If true, matching is case-insensitive (equivalent to `grep -i`).",
-					},
-					whole_word: {
-						type: "boolean",
-						default: false,
-						description:
-							"If true, only match whole words (equivalent to `grep -w`). Adds word boundaries around the pattern; do not combine with line anchors like `^` or `$` in the same keyword.",
-					},
-					invert_match: {
-						type: "boolean",
-						default: false,
-						description:
-							"If true, return lines that do NOT match the pattern (equivalent to `grep -v`). Context lines are ignored when inverted matching is enabled.",
-					},
-					lines_before: {
-						type: "integer",
-						description:
-							"Number of context lines before each match (file mode only, default 0). Ignored when `invert_match` is true.",
-					},
-					lines_after: {
-						type: "integer",
-						description:
-							"Number of context lines after each match (file mode only, default 0). Ignored when `invert_match` is true.",
-					},
+		name: "grep",
+		description:
+			'Search for a pattern in a file or directory. By default the keyword is interpreted as an ECMAScript regular expression (like `grep -E`). Use `regex: false` to search for the exact literal text. Supports case-insensitive, whole-word, and inverted matching. For directories, recursively searches all files (ignoring common patterns, skipping binary files, truncating long lines). For files, returns matching lines with optional context. Output format: "path:line:content".',
+		parameters: {
+			type: "object",
+			properties: {
+				uri: {
+					type: "string",
+					description:
+						"The file or directory URI to search in.",
 				},
-				required: ["uri", "keyword"],
+				keyword: {
+					type: "string",
+					description:
+						'The search pattern. By default treated as an ECMAScript regular expression (like `grep -E`). Set `regex: false` to search for the exact literal text. Supported regex features: `.`, `*`, `+`, `?`, `^`, `$`, `|`, `[...]`, `\\b`, `(?:...)`, character classes, and quantifiers. Lookaround, back-references, and PCRE-only syntax are not supported.',
+				},
+				regex: {
+					type: "boolean",
+					default: true,
+					description:
+						"If true (default), the keyword is treated as an ECMAScript regular expression. If false, the keyword is matched as a literal string.",
+				},
+				case_insensitive: {
+					type: "boolean",
+					default: false,
+					description:
+						"If true, matching is case-insensitive (equivalent to `grep -i`).",
+				},
+				whole_word: {
+					type: "boolean",
+					default: false,
+					description:
+						"If true, only match whole words (equivalent to `grep -w`). Adds word boundaries around the pattern; do not combine with line anchors like `^` or `$` in the same keyword.",
+				},
+				invert_match: {
+					type: "boolean",
+					default: false,
+					description:
+						"If true, return lines that do NOT match the pattern (equivalent to `grep -v`). Context lines are ignored when inverted matching is enabled.",
+				},
+				lines_before: {
+					type: "integer",
+					description:
+						"Number of context lines before each match (file mode only, default 0). Ignored when `invert_match` is true.",
+				},
+				lines_after: {
+					type: "integer",
+					description:
+						"Number of context lines after each match (file mode only, default 0). Ignored when `invert_match` is true.",
+				},
 			},
+			required: ["uri", "keyword"],
 		},
 	},
 	execute: async (args: any, context: ToolContext) => {

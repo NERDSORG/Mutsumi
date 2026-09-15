@@ -154,10 +154,12 @@ export class ReferenceCompletionProvider implements vscode.CompletionItemProvide
             const tools = tm.getToolsDefinitions(false);
 
             for (const tool of tools) {
-                const fn = (tool as any).function;
-                const name = fn.name;
-                const desc = fn.description || t('completion.tool');
-                const parameters = fn.parameters || {};
+                const name = tool.name;
+                const desc = tool.description || t('completion.tool');
+                const parameters = tool.parameters as {
+                    properties?: Record<string, { type?: string | string[]; description?: string }>;
+                    required?: string[];
+                };
 
                 const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Function);
                 item.detail = t('completion.toolCall');

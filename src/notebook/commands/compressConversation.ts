@@ -5,10 +5,12 @@
 
 import * as vscode from 'vscode';
 import { AgentMessage, AgentMetadata } from '../../types';
+import { createUserMessage, extractText } from '@moonshot-ai/kosong';
+import type { ProviderType } from '@moonshot-ai/kosong';
 import { LiteAdapter, LiteAgentSessionConfig } from '../../adapters/liteAdapter';
 import { buildInteractionHistory } from '../../contextManagement/history';
 import { createEmptyToolSet } from '../../tools.d/toolManager';
-import type { AgentRunOptions } from '../../agent/types';
+import type { AgentRunOptions } from '../../agent/interfaces';
 import { MutsumiSerializer } from '../serializer';
 import { formatMessagesToString, createDebugSessionFromNotebook } from './utils';
 import { getCompressModelSelection, getModelCredentials, resolveModelSelection } from '../../utils';
@@ -76,14 +78,14 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
                 const compressModel = compressSelection.model;
                 const compressProvider = compressSelection.provider;
 
-                let credentials: { apiKey: string; baseUrl: string };
+                let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
                 try {
                     credentials = getModelCredentials(compressModel, compressProvider);
                 } catch (err: any) {
                     vscode.window.showErrorMessage(t('compress.failed', err.message));
                     return;
                 }
-                const { apiKey, baseUrl } = credentials;
+                const { apiKey, baseUrl, providerType } = credentials;
 
                 // Build session and get full interaction history
                 const session = await createDebugSessionFromNotebook(editor.notebook, lastCodeCellIndex);
@@ -110,7 +112,7 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
                     const compressionMessages: AgentMessage[] = [
                         {
                             role: 'system',
-                            content: 'You are a conversation compression assistant. Your task is to compress a long conversation into a concise summary while preserving all important information, decisions, and context.\n\n' +
+                            content: [{ type: 'text', text: 'You are a conversation compression assistant. Your task is to compress a long conversation into a concise summary while preserving all important information, decisions, and context.\n\n' +
                                 'Requirements:\n' +
                                 '1. Summarize the main topics and goals discussed\n' +
                                 '2. Preserve all key decisions and conclusions\n' +
@@ -118,12 +120,10 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
                                 '4. Maintain the chronological flow of the conversation\n' +
                                 '5. Keep the summary concise but comprehensive\n' +
                                 '6. Use markdown formatting for clarity\n' +
-                                '7. Do not include meta-commentary about the compression process'
+                                '7. Do not include meta-commentary about the compression process' }],
+                            toolCalls: []
                         },
-                        {
-                            role: 'user',
-                            content: `Please compress the following conversation into a concise summary:\n\n${conversationText}`
-                        }
+                        createUserMessage(`Please compress the following conversation into a concise summary:\n\n${conversationText}`)
                     ];
 
                     // Create lite adapter and session for compression
@@ -148,6 +148,7 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
                         model: compressModel,
                         apiKey,
                         baseUrl,
+                        providerType,
                         maxLoops: 1 // Single round since no tools
                     };
                     const runner = new AgentRunner(runOptions, emptyToolSet, compressSession);
@@ -158,13 +159,10 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
 
                     // Extract compressed content
                     const lastAssistantMsg = [...compressedMessages].reverse().find(m => m.role === 'assistant');
-                    if (!lastAssistantMsg?.content) {
+                    const compressedContent = lastAssistantMsg ? extractText(lastAssistantMsg) : '';
+                    if (!compressedContent) {
                         throw new Error('Compression failed: no response from LLM');
                     }
-
-                    const compressedContent = typeof lastAssistantMsg.content === 'string' 
-                        ? lastAssistantMsg.content 
-                        : JSON.stringify(lastAssistantMsg.content);
 
                     // Generate new file name
                     const originalUri = editor.notebook.uri;
@@ -191,17 +189,14 @@ export function registerCompressConversationCommand(context: vscode.ExtensionCon
                     };
 
                     // Create single user message with compressed content
-                    const compressedContext: AgentMessage[] = [{
-                        role: 'user',
-                        content: `## Conversation Summary\n\n${compressedContent}\n\n---\n\n*This is a compressed version of the original conversation. Original file: ${originalName}*`
-                    }];
+                    const compressedText = `## Conversation Summary\n\n${compressedContent}\n\n---\n\n*This is a compressed version of the original conversation. Original file: ${originalName}*`;
 
                     // Create notebook data using serializer
                     const serializer = new MutsumiSerializer();
                     const notebookData = new vscode.NotebookData([
                         new vscode.NotebookCellData(
                             vscode.NotebookCellKind.Code,
-                            compressedContext[0].content as string,
+                            compressedText,
                             'markdown'
                         )
                     ]);

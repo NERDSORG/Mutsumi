@@ -29,7 +29,7 @@ import { queryCodebaseTool } from "./tools/rag";
 import { AgentTypeRegistry } from "../registry/agentTypeRegistry";
 import { ToolSetRegistry } from "../registry/toolSetRegistry";
 import * as vscode from "vscode";
-import type OpenAI from "openai";
+import type { Tool } from "@moonshot-ai/kosong";
 import { getCachedResult, setCachedResult } from "./cache";
 import { McpRegistry } from "../mcp/registry";
 import { McpToolAdapter } from "../mcp/tool";
@@ -97,10 +97,10 @@ export class ToolSet {
 	}
 
 	/**
-	 * Gets all tool definitions formatted for OpenAI API.
-	 * @returns {OpenAI.Chat.ChatCompletionTool[]} Array of tool definitions
+	 * Gets all tool definitions in the provider-agnostic kosong wire schema.
+	 * @returns {Tool[]} Array of tool definitions
 	 */
-	getDefinitions(): OpenAI.Chat.ChatCompletionTool[] {
+	getDefinitions(): Tool[] {
 		return Array.from(this.tools.values()).map((t) => t.definition);
 	}
 
@@ -419,13 +419,13 @@ export class ToolManager {
 	}
 
 	/**
-	 * Gets tool definitions formatted for OpenAI API.
+	 * Gets tool definitions in the provider-agnostic kosong wire schema.
 	 * @param {boolean} isSubAgent - True for non-root/child sessions (includes task_finish)
-	 * @returns {OpenAI.Chat.ChatCompletionTool[]} Array of tool definitions
+	 * @returns {Tool[]} Array of tool definitions
 	 */
 	public getToolsDefinitions(
 		isSubAgent: boolean,
-	): OpenAI.Chat.ChatCompletionTool[] {
+	): Tool[] {
 		return this.getUserToolSet(isSubAgent).getDefinitions();
 	}
 

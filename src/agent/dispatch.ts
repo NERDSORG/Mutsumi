@@ -4,25 +4,7 @@
  */
 
 import { AgentStateInfo } from './types';
-
-/**
- * Represents an active dispatch session with its state and callbacks.
- * @interface DispatchSession
- */
-interface DispatchSession {
-    /** Parent agent ID that initiated the dispatch */
-    parentId: string;
-    /** Resolve callback for the dispatch promise */
-    resolve: (value: string | PromiseLike<string>) => void;
-    /** Reject callback for the dispatch promise */
-    reject: (reason?: any) => void;
-    /** Set of child agent UUIDs in this session */
-    childUuids: Set<string>;
-    /** Map of child UUID to their result reports */
-    results: Map<string, string>;
-    /** Set of child UUIDs that were deleted */
-    deletedChildren: Set<string>;
-}
+import type { DispatchSession } from './interfaces';
 
 /**
  * Manages dispatch sessions for sub-agents.
@@ -271,6 +253,3 @@ export class DispatchSessionManager {
         this.activeDispatches.clear();
     }
 }
-
-// Export the interface for external use
-export type { DispatchSession };

@@ -16,32 +16,29 @@ function shellLogger(message: string): void {
 export const shellTool: ITool = {
 	name: "shell",
 	definition: {
-		type: "function",
-		function: {
-			name: "shell",
-			description:
-				"Execute a shell command. Requires user approval. By default waits for the command to finish (sync). Set background=true to start it detached and return immediately with a task id; use inspect_shell_task to inspect its output later.",
-			parameters: {
-				type: "object",
-				properties: {
-					uri: {
-						type: "string",
-						description: "The URI where command should be executed (CWD).",
-					},
-					cmd: { type: "string", description: "The shell command to execute." },
-					shell_path: {
-						type: "string",
-						description:
-							"Absolute path to the shell executable (e.g. /bin/bash, C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe). If omitted, defaults to system default.",
-					},
-					background: {
-						type: "boolean",
-						description:
-							"If true, run detached and return immediately with a task id without waiting for exit. Use inspect_shell_task to inspect. Default: false (sync wait for exit).",
-					},
+		name: "shell",
+		description:
+			"Execute a shell command. Requires user approval. By default waits for the command to finish (sync). Set background=true to start it detached and return immediately with a task id; use inspect_shell_task to inspect its output later.",
+		parameters: {
+			type: "object",
+			properties: {
+				uri: {
+					type: "string",
+					description: "The URI where command should be executed (CWD).",
 				},
-				required: ["uri", "cmd"],
+				cmd: { type: "string", description: "The shell command to execute." },
+				shell_path: {
+					type: "string",
+					description:
+						"Absolute path to the shell executable (e.g. /bin/bash, C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe). If omitted, defaults to system default.",
+				},
+				background: {
+					type: "boolean",
+					description:
+						"If true, run detached and return immediately with a task id without waiting for exit. Use inspect_shell_task to inspect. Default: false (sync wait for exit).",
+				},
 			},
+			required: ["uri", "cmd"],
 		},
 	},
 	execute: async (args: any, context: ToolContext) => {

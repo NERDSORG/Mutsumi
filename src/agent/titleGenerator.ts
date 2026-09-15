@@ -4,14 +4,15 @@
  */
 
 import * as vscode from 'vscode';
-import { AgentMessage, AgentMetadata, ModelSelection } from '../types';
-import { LLMClient, LLMClientConfig } from './llmClient';
+import { AgentMessage, AgentMetadata } from '../types';
+import { createUserMessage, extractText } from '@moonshot-ai/kosong';
+import type { ProviderType } from '@moonshot-ai/kosong';
 import { AgentOrchestrator } from './agentOrchestrator';
 import { IAgentSession } from '../adapters/interfaces';
 import { LiteAdapter } from '../adapters/liteAdapter';
 import { createEmptyToolSet } from '../tools.d/toolManager';
 import { getModelCredentials, getTitleModelSelection, resolveModelSelection } from '../utils';
-import type { AgentRunOptions } from './types';
+import type { AgentRunOptions, GenerateTitleConfig, TitleGeneratorConfig } from './interfaces';
 
 /**
  * Creates a deep clone of an object.
@@ -20,15 +21,6 @@ import type { AgentRunOptions } from './types';
  */
 function deepClone<T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
-}
-
-/**
- * Configuration interface for title generation.
- * @interface TitleGeneratorConfig
- */
-export interface TitleGeneratorConfig {
-    /** Model selection pair to use for title generation */
-    modelSelection?: ModelSelection;
 }
 
 /**
@@ -77,16 +69,14 @@ function createTitleGenerationMessages(messages: AgentMessage[]): AgentMessage[]
     return [
         {
             role: 'system',
-            content: 'Please generate a short title based on the following conversation content. ' +
+            content: [{ type: 'text', text: 'Please generate a short title based on the following conversation content. ' +
                 'The title should summarize the main topic of the conversation. ' +
                 'Conversation data is provided in JSON format, containing messages from user, assistant, tool roles. ' +
                 'Requirements:\n1. Length should be 10-20 characters\n2. No special characters like \\\/:*?"<>|' +
-                '\n3. Return only the title text, no explanations or prefixes'
+                '\n3. Return only the title text, no explanations or prefixes' }],
+            toolCalls: []
         },
-        {
-            role: 'user',
-            content: `Please generate a title for this conversation:\n\n${contextJson.substring(0, 4000)}`
-        }
+        createUserMessage(`Please generate a title for this conversation:\n\n${contextJson.substring(0, 4000)}`)
     ];
 }
 
@@ -95,13 +85,13 @@ function createTitleGenerationMessages(messages: AgentMessage[]): AgentMessage[]
  * @description Uses the standard AgentRunner infrastructure with an empty tool set,
  * ensuring single-round execution (since no tools are available).
  * @param {AgentMessage[]} messages - Conversation message history
- * @param {LLMClientConfig} config - LLM client configuration
+ * @param {GenerateTitleConfig} config - Title generation configuration
  * @param {AgentMetadata} [sourceMetadata] - Optional source metadata to copy (includes agentType and contextItems)
  * @returns {Promise<string>} Generated title string
  */
 export async function generateTitle(
     messages: AgentMessage[],
-    config: LLMClientConfig,
+    config: GenerateTitleConfig,
     sourceMetadata?: AgentMetadata
 ): Promise<string> {
     // Dynamically import AgentRunner to avoid circular dependency
@@ -126,6 +116,7 @@ export async function generateTitle(
         model: config.model,
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
+        providerType: config.providerType,
         maxLoops: 1 // Extra safety: limit to 1 loop
     };
 
@@ -142,8 +133,11 @@ export async function generateTitle(
     // The last assistant message contains the title
     const lastAssistantMsg = [...newMessages].reverse().find(m => m.role === 'assistant');
     let title = 'New Agent';
-    if (lastAssistantMsg?.content && typeof lastAssistantMsg.content === 'string') {
-        title = lastAssistantMsg.content.trim();
+    if (lastAssistantMsg) {
+        const text = extractText(lastAssistantMsg).trim();
+        if (text) {
+            title = text;
+        }
     }
 
     // Sanitize the title
@@ -165,7 +159,11 @@ export function extractMessagesFromNotebook(notebook: vscode.NotebookDocument): 
     const messages: AgentMessage[] = [];
     for (const cell of notebook.getCells()) {
         if (cell.kind === vscode.NotebookCellKind.Code) {
-            messages.push({ role: 'user', content: cell.document.getText() });
+            messages.push({
+                role: 'user',
+                content: [{ type: 'text', text: cell.document.getText() }],
+                toolCalls: []
+            });
             if (cell.metadata?.mutsumi_interaction) {
                 messages.push(...(cell.metadata.mutsumi_interaction as AgentMessage[]));
             }
@@ -247,7 +245,7 @@ export class TitleGenerator {
 
         const modelSelection = config.modelSelection!;
 
-        let credentials: { apiKey: string; baseUrl: string };
+        let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
         try {
             credentials = getModelCredentials(modelSelection.model, modelSelection.provider);
         } catch (err: any) {
@@ -261,7 +259,8 @@ export class TitleGenerator {
             const title = await generateTitle(messages, {
                 apiKey: credentials.apiKey,
                 baseUrl: credentials.baseUrl,
-                model: modelSelection.model
+                model: modelSelection.model,
+                providerType: credentials.providerType
             }, sourceMetadata);
 
             await session.updateTitle(title);
@@ -302,7 +301,7 @@ export async function regenerateTitleForSession(
     // Validate the pair through the gate before use.
     resolveModelSelection(modelSelection);
 
-    let credentials: { apiKey: string; baseUrl: string };
+    let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
     try {
         credentials = getModelCredentials(modelSelection.model, modelSelection.provider);
     } catch (err: any) {
@@ -314,7 +313,8 @@ export async function regenerateTitleForSession(
     const title = await generateTitle(messages, {
         apiKey: credentials.apiKey,
         baseUrl: credentials.baseUrl,
-        model: modelSelection.model
+        model: modelSelection.model,
+        providerType: credentials.providerType
     }, sourceMetadata);
 
     await session.updateTitle(title);
