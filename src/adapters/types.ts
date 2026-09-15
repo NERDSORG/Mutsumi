@@ -12,9 +12,6 @@ import type {
   ToolResult,
   AgentRuntimeStatus,
   AgentStateInfo,
-  MessageContent,
-  ContentPartText,
-  ContentPartImage,
   ContextItem,
 } from '../types';
 
@@ -27,9 +24,6 @@ export {
   ToolResult,
   AgentRuntimeStatus,
   AgentStateInfo,
-  MessageContent,
-  ContentPartText,
-  ContentPartImage,
   ContextItem,
 };
 

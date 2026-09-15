@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { AgentMessage, AgentMetadata, MessageContent, ContextItem } from '../types';
+import { extractText } from '@moonshot-ai/kosong';
+import { AgentMessage, AgentMetadata, ContextItem } from '../types';
 import { IAgentSession } from '../adapters/interfaces';
 import { getSystemPrompt, getRulesContext } from './prompts';
 import { TemplateEngine } from './templateEngine';
@@ -76,7 +77,8 @@ export async function buildInteractionHistory(
 
     messages.push({
         role: 'system',
-        content: systemPromptContent
+        content: [{ type: 'text', text: systemPromptContent }],
+        toolCalls: []
     });
 
     // Get previous ghost blocks for version tracking
@@ -169,9 +171,9 @@ export async function buildInteractionHistory(
     // assistant and tool messages that followed that user prompt
     for (const msg of history) {
         if (msg.role === 'user') {
-            const multiModalContent = await parseUserMessageWithImages(
-                typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-            );
+            // Persisted user content is a single text part holding the raw
+            // markdown; images are re-parsed at assembly time (never persisted).
+            const multiModalContent = await parseUserMessageWithImages(extractText(msg));
             // Append the persisted ghost block if it exists
             const savedGhostBlock = previousGhostBlocks[ghostBlockIndex] ?? null;
             ghostBlockIndex++;
@@ -180,14 +182,9 @@ export async function buildInteractionHistory(
                 : '';
 
             if (savedGhostMarkdown) {
-                if (Array.isArray(multiModalContent)) {
-                    messages.push({ role: 'user', content: [...multiModalContent, { type: 'text', text: savedGhostMarkdown }] });
-                } else {
-                    messages.push({ role: 'user', content: multiModalContent + savedGhostMarkdown });
-                }
-            } else {
-                messages.push({ role: 'user', content: multiModalContent });
+                multiModalContent.push({ type: 'text', text: savedGhostMarkdown });
             }
+            messages.push({ role: 'user', content: multiModalContent, toolCalls: [] });
 
             // Expand mutsumi_interaction from user message metadata
             // This contains the assistant response and any tool calls/results
@@ -226,15 +223,9 @@ export async function buildInteractionHistory(
     // 6. Push final message
     const currentMultiModalContent = await parseUserMessageWithImages(processedPrompt);
     if (currentGhostMarkdown) {
-        if (Array.isArray(currentMultiModalContent)) {
-            currentMultiModalContent.push({ type: 'text', text: currentGhostMarkdown });
-            messages.push({ role: 'user', content: currentMultiModalContent });
-        } else {
-            messages.push({ role: 'user', content: currentMultiModalContent + currentGhostMarkdown });
-        }
-    } else {
-        messages.push({ role: 'user', content: currentMultiModalContent });
+        currentMultiModalContent.push({ type: 'text', text: currentGhostMarkdown });
     }
+    messages.push({ role: 'user', content: currentMultiModalContent, toolCalls: [] });
 
     return { messages, allowedUris, isSubAgent };
 }

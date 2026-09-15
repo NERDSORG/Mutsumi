@@ -3,6 +3,8 @@
  * @module types
  */
 
+import type { ProviderType } from '@moonshot-ai/kosong';
+
 /**
  * Provider configuration using snake_case for settings schema alignment.
  * @interface Provider
@@ -14,6 +16,8 @@ export interface Provider {
     baseurl: string;
     /** API key for the provider */
     api_key: string;
+    /** Wire protocol type (kosong `ProviderType`): selects which line protocol / provider adapter talks to this endpoint */
+    type: ProviderType;
 }
 
 /**
@@ -32,8 +36,22 @@ export interface ModelSelection {
  * Default providers used when user hasn't configured any providers.
  */
 export const DEFAULT_PROVIDERS: Provider[] = [
-    { name: "kimi-for-coding", baseurl: "https://api.kimi.com/coding/v1", api_key: "" }
+    { name: "kimi-for-coding", baseurl: "https://api.kimi.com/coding/v1", api_key: "", type: "kimi" }
 ];
+
+/**
+ * Runtime mirror of the kosong `ProviderType` union. Consumed by the
+ * validation gate in utils.ts on untrusted settings JSON (a type-only
+ * import cannot be checked at runtime).
+ */
+export const VALID_PROVIDER_TYPES = [
+    "kimi",
+    "openai",
+    "openai_responses",
+    "anthropic",
+    "google-genai",
+    "vertexai"
+] as const satisfies readonly ProviderType[];
 
 /**
  * Default models configuration used when user hasn't configured any models.
@@ -90,53 +108,30 @@ export interface AgentMetadata {
     agentType?: string;
     /** Frozen selection of MCP tools enabled for this session. */
     enabledMcpTools?: McpToolSelection[];
-    
+
+    /** Format version marker written by the serializer for future .mtm migrators; never read at runtime */
+    mtm_version?: number;
+
     /** List of sub-agent UUIDs created by this agent */
     sub_agents_list?: string[];
 }
 
-/**
- * Text content part for multimodal messages.
- * @interface ContentPartText
- */
-export type ContentPartText = { type: 'text'; text: string };
-
-/**
- * Image content part for multimodal messages.
- * @interface ContentPartImage
- */
-export type ContentPartImage = { 
-    type: 'image_url'; 
-    image_url: { 
-        url: string; 
-        detail?: 'auto' | 'low' | 'high' 
-    } 
-};
-
-/**
- * Message content can be plain text or multimodal parts.
- */
-export type MessageContent = string | (ContentPartText | ContentPartImage)[];
+// ============================================================================
+// kosong message model (everything below McpToolSelection)
+// ============================================================================
+import type { Message } from '@moonshot-ai/kosong';
 
 /**
  * Message in an agent conversation.
+ * Kosong `Message` in full (`content: ContentPart[]` and `toolCalls: ToolCall[]`
+ * are both required) plus the Mutsumi cell↔message pipeline metadata channel.
+ * `metadata` carries ghost-block / interaction state and never goes on the wire
+ * (outbound messages are always rebuilt by explicit field construction).
  * @interface AgentMessage
  */
-export interface AgentMessage {
-    /** Role of the message sender */
-    role: 'user' | 'assistant' | 'system' | 'tool';
-    /** Message content, null if only tool calls */
-    content: MessageContent | null;
-    /** Tool calls requested by assistant */
-    tool_calls?: any[];
-    /** ID of the tool call this message responds to */
-    tool_call_id?: string;
-    /** Name of the tool being called */
-    name?: string;
-    /** Reasoning/thinking content from the model */
-    reasoning_content?: string;
-    /** Additional metadata for the message (e.g. ghost block state) */
-    metadata?: any;
+export interface AgentMessage extends Message {
+    /** Pipeline-only metadata (e.g. ghost block state, mutsumi_interaction) */
+    metadata?: { [key: string]: any };
 }
 
 /**

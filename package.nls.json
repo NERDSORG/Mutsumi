@@ -39,8 +39,9 @@
 	"command.removeShellTask.title": "Remove",
 
 	"configuration.title": "Mutsumi",
-	"configuration.providers.markdownDescription": "Configured LLM API providers\n\nExample:\n```json\n\"mutsumi.providers\": [\n    {\n        \"name\": \"kimi-for-coding\",\n        \"baseurl\": \"https://api.kimi.com/coding/v1\",\n        \"api_key\": \"sk-kimi-XXXXXXXXXXXXXXXXXXXXXX\"\n    }\n]\n```",
+	"configuration.providers.markdownDescription": "Configured LLM API providers\n\nExample:\n```json\n\"mutsumi.providers\": [\n    {\n        \"name\": \"kimi-for-coding\",\n        \"type\": \"kimi\",\n        \"baseurl\": \"https://api.kimi.com/coding/v1\",\n        \"api_key\": \"sk-kimi-XXXXXXXXXXXXXXXXXXXXXX\"\n    }\n]\n```",
 	"configuration.providers.items.name.markdownDescription": "LLM API Provider Name (e.g., OpenAI, Anthropic, llama.cpp)",
+	"configuration.providers.items.type.markdownDescription": "Wire protocol type of this provider, selecting the API dialect used to talk to the endpoint. Values: `kimi` (Moonshot/Kimi line), `openai` (OpenAI-compatible chat completions — DeepSeek, vLLM, LiteLLM, One API, OpenRouter, llama.cpp, etc.), `openai_responses` (OpenAI Responses API), `anthropic` (Anthropic native API), `google-genai` (Google Gemini API), `vertexai` (Google Vertex AI)",
 	"configuration.providers.items.baseurl.markdownDescription": "LLM API BaseURL (e.g., https://api.openai.com/v1, http://localhost:8080/v1)",
 	"configuration.providers.items.api_key.markdownDescription": "LLM API Key (required, use dummy value for local deployments without authentication)",
 	"configuration.models.markdownDescription": "Provider to models mapping. Key is the provider name from `mutsumi.providers`, value is an array of model identifiers supported by that provider. **Edit this in `settings.json` directly.**\n\nExample:\n```json\n\"mutsumi.models\": {\n    \"Baidu Qianfan\": [\n        \"glm-5.2\",\n        \"deepseek-v4-flash\"\n    ],\n    \"Alibaba Tokenplan\": [\n        \"glm-5.2\",\n        \"deepseek-v4-flash\"\n    ]\n}\n```",

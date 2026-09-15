@@ -284,6 +284,7 @@ Mutsumi 默认使用 `kimi-for-coding` 模型。你只需在 VS Code 设置中�
 "mutsumi.providers": [
     {
         "name": "kimi-for-coding",
+        "type": "kimi",
         "baseurl": "https://api.kimi.com/coding/v1",
         "api_key": "sk-kimi-XXXXXXXXXXXXXXXXXXXXXX"
     }

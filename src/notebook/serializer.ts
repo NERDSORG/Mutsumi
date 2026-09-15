@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { TextDecoder, TextEncoder } from 'util';
-import { AgentContext, AgentMessage, AgentMetadata, MessageContent } from '../types';
+import { extractText } from '@moonshot-ai/kosong';
+import type { ContentPart, ThinkPart } from '@moonshot-ai/kosong';
+import { AgentContext, AgentMessage, AgentMetadata } from '../types';
 import { AgentOrchestrator } from '../agent/agentOrchestrator';
 import { ToolManager } from '../tools.d/toolManager';
 import { v4 as uuidv4 } from 'uuid';
@@ -178,7 +180,8 @@ export function genericCellsToMessages(cells: GenericCellData[]): AgentMessage[]
         if (role === 'system') {
             messages.push({
                 role: 'system',
-                content: cell.value.replace('**System**: ', '')
+                content: [{ type: 'text', text: cell.value.replace('**System**: ', '') }],
+                toolCalls: []
             });
             debugLogger.log(`[genericCellsToMessages]   - Added system message`);
         } else if (role === 'user') {
@@ -187,7 +190,8 @@ export function genericCellsToMessages(cells: GenericCellData[]): AgentMessage[]
 
             const userMsg: AgentMessage = {
                 role: 'user',
-                content: cleanContent
+                content: [{ type: 'text', text: cleanContent }],
+                toolCalls: []
             };
 
             // Preserve metadata (especially ghost block state)
@@ -210,7 +214,11 @@ export function genericCellsToMessages(cells: GenericCellData[]): AgentMessage[]
         } else {
             // Assistant cell: use cell value directly, ignore any mutsumi_interaction
             // (mutsumi_interaction should never exist on assistant cells, but handle gracefully)
-            messages.push({ role: 'assistant', content: cell.value });
+            messages.push({
+                role: 'assistant',
+                content: [{ type: 'text', text: cell.value }],
+                toolCalls: []
+            });
             debugLogger.log(`[genericCellsToMessages]   - Added assistant message from cell value, content length: ${cell.value.length}`);
         }
     }
@@ -248,32 +256,34 @@ function buildInteractionRenderBlocks(group: AgentMessage[], isSubAgent: boolean
 
     for (const m of group) {
         if (m.role === 'assistant') {
-            // Build tool call map
-            if (m.tool_calls) {
-                for (const tc of m.tool_calls) {
-                    let parsedArgs: any = {};
-                    if (tc.function?.arguments) {
-                        try { parsedArgs = JSON.parse(tc.function.arguments); } catch { parsedArgs = {}; }
-                    }
-                    if (tc.id) {
-                        toolCallMap.set(tc.id, { name: tc.function.name, args: parsedArgs });
-                    }
+            // Build tool call map from kosong flat toolCalls
+            for (const tc of m.toolCalls) {
+                let parsedArgs: any = {};
+                if (tc.arguments) {
+                    try { parsedArgs = JSON.parse(tc.arguments); } catch { parsedArgs = {}; }
+                }
+                if (tc.id) {
+                    toolCallMap.set(tc.id, { name: tc.name, args: parsedArgs });
                 }
             }
-            // Add reasoning block if exists
-            const reasoningStr = m.reasoning_content || '';
+            // Add reasoning block if exists (think parts, hidden included:
+            // re-open replay is an audit scenario). Reasoning precedes content.
+            const reasoningStr = m.content
+                .filter((part): part is ThinkPart => part.type === 'think')
+                .map(part => part.think)
+                .join('');
             if (reasoningStr) {
                 blocks.push({ type: 'reasoning', markdown: reasoningStr, collapsed: true });
             }
-            // Add content block if exists
+            // Add content block if exists (text parts; think parts never render here)
             const contentStr = serializeContentToString(m.content);
             if (contentStr) {
                 blocks.push({ type: 'content', markdown: contentStr });
             }
         } else if (m.role === 'tool') {
             // Add tool call block
-            const contentStr = serializeContentToString(m.content);
-            const mapped = m.tool_call_id ? toolCallMap.get(m.tool_call_id) : undefined;
+            const contentStr = extractText(m);
+            const mapped = m.toolCallId ? toolCallMap.get(m.toolCallId) : undefined;
             const toolName = mapped?.name ?? m.name ?? 'unknown';
             const args = mapped?.args ?? {};
             const prettyPrintSummary = mapped
@@ -332,17 +342,17 @@ function stripGhostBlockFromCell(value: string): string {
 }
 
 /**
- * Serialize message content to string.
+ * Serialize message content parts to string.
+ * text → raw text; image_url → markdown image; think/audio/video never enter cell values.
  */
-function serializeContentToString(content: MessageContent | null | undefined): string {
+function serializeContentToString(content: ContentPart[] | undefined): string {
     if (!content) return '';
-    if (typeof content === 'string') return content;
 
     return content.map(part => {
         if (part.type === 'text') {
             return part.text;
         } else if (part.type === 'image_url') {
-            return `![image](${part.image_url.url})`;
+            return `![image](${part.imageUrl.url})`;
         }
         return '';
     }).join('');
@@ -389,7 +399,7 @@ export class MutsumiSerializer implements vscode.NotebookSerializer {
             debugLogger.log(`[deserializeNotebook] Context message count: ${raw.context?.length ?? 0}`);
             if (raw.context && raw.context.length > 0) {
                 raw.context.forEach((msg, idx) => {
-                    debugLogger.log(`[deserializeNotebook] Message ${idx}: role=${msg.role}, content length=${typeof msg.content === 'string' ? msg.content.length : JSON.stringify(msg.content).length}`);
+                    debugLogger.log(`[deserializeNotebook] Message ${idx}: role=${msg.role}, content length=${JSON.stringify(msg.content).length}`);
                 });
             }
         } catch (err) {
@@ -497,6 +507,7 @@ export class MutsumiSerializer implements vscode.NotebookSerializer {
                 allowed_uris: allowedUris,
                 model: defaults.model,
                 provider: defaults.provider,
+                mtm_version: 2,
                 contextItems: [
                     {
                         type: 'macro',
@@ -547,13 +558,15 @@ export class MutsumiSerializer implements vscode.NotebookSerializer {
         const context = genericCellsToMessages(genericCells);
         debugLogger.log(`[serializeNotebook] Generated ${context.length} messages`);
         context.forEach((msg, idx) => {
-            debugLogger.log(`[serializeNotebook] Message ${idx}: role=${msg.role}, content length=${typeof msg.content === 'string' ? msg.content.length : JSON.stringify(msg.content).length}`);
+            debugLogger.log(`[serializeNotebook] Message ${idx}: role=${msg.role}, content length=${JSON.stringify(msg.content).length}`);
         });
 
         // Build metadata with sub_agents_list from agentRegistry
         // This ensures the relationship is only persisted when this agent is saved,
         // not when child agents are created
         const metadata = { ...data.metadata } as AgentMetadata;
+        // Format version marker for future .mtm migrators (write-only; never read)
+        metadata.mtm_version = 2;
         if (metadata.uuid) {
             const agent = AgentOrchestrator.getInstance().getAgentById(metadata.uuid);
             if (agent?.childIds) {

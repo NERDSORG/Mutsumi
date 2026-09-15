@@ -408,6 +408,18 @@
                                 "type": "string",
                                 "markdownDescription": "%configuration.providers.items.name.markdownDescription%"
                             },
+                            "type": {
+                                "type": "string",
+                                "enum": [
+                                    "kimi",
+                                    "openai",
+                                    "openai_responses",
+                                    "anthropic",
+                                    "google-genai",
+                                    "vertexai"
+                                ],
+                                "markdownDescription": "%configuration.providers.items.type.markdownDescription%"
+                            },
                             "baseurl": {
                                 "type": "string",
                                 "markdownDescription": "%configuration.providers.items.baseurl.markdownDescription%"
@@ -420,6 +432,7 @@
                         },
                         "required": [
                             "name",
+                            "type",
                             "baseurl",
                             "api_key"
                         ]

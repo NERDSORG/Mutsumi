@@ -4,6 +4,9 @@
  */
 
 import { LLMClient, StreamChunk } from './llmClient';
+import type { ToolCall } from '@moonshot-ai/kosong';
+import type { AgentMessage } from '../types';
+import { toOpenAIMessage } from './openaiProjection';
 
 /**
  * Callback function type for streaming progress updates.
@@ -24,7 +27,7 @@ export interface StreamResponseResult {
     /** Accumulated reasoning content (e.g., from DeepSeek reasoning models) */
     roundReasoning: string;
     /** Parsed tool calls from the response */
-    toolCalls: any[];
+    toolCalls: ToolCall[];
 }
 
 /**
@@ -114,7 +117,7 @@ export class LLMStreamHandler {
      * );
      */
     async streamResponse(
-        messages: any[],
+        messages: AgentMessage[],
         tools: any[],
         signal: AbortSignal,
         onProgress?: StreamProgressCallback
@@ -158,13 +161,15 @@ export class LLMStreamHandler {
      * @throws {Error} If the API call fails or is aborted
      */
     private async doStreamResponse(
-        messages: any[],
+        messages: AgentMessage[],
         tools: any[],
         signal: AbortSignal,
         onProgress?: StreamProgressCallback
     ): Promise<StreamResponseResult> {
         const stream = this.llmClient.streamChatCompletion({
-            messages,
+            // Outbound kosong messages are projected to the OpenAI wire shape
+            // (see openaiProjection.ts).
+            messages: messages.map(toOpenAIMessage),
             tools,
             tool_choice: 'auto',
             signal
@@ -231,13 +236,13 @@ export class LLMStreamHandler {
      * @description Handles JSON parsing of tool arguments, including error recovery
      * for malformed JSON and deduplication of repeated arguments.
      * @param {any[]} rawToolCalls - Raw tool call data from stream
-     * @returns {any[]} Parsed tool calls with proper structure
+     * @returns {ToolCall[]} Parsed tool calls in kosong flat shape
      * @example
      * const toolCalls = handler.parseToolCalls(rawToolCalls);
-     * // Returns: [{ id: 'call_xxx', type: 'function', function: { name: 'toolName', arguments: '{}' } }]
+     * // Returns: [{ type: 'function', id: 'call_xxx', name: 'toolName', arguments: '{}' }]
      */
-    parseToolCalls(rawToolCalls: any[]): any[] {
-        const finalToolCalls: any[] = [];
+    parseToolCalls(rawToolCalls: any[]): ToolCall[] {
+        const finalToolCalls: ToolCall[] = [];
         
         for (const tc of rawToolCalls) {
             const toolName = tc.function.name;
@@ -270,12 +275,10 @@ export class LLMStreamHandler {
             argsArray.forEach((args, i) => {
                 const callId = (i === 0 && tc.id) ? tc.id : 'call_' + Math.random().toString(36).substring(2, 11);
                 finalToolCalls.push({
-                    id: callId,
                     type: 'function',
-                    function: {
-                        name: toolName,
-                        arguments: JSON.stringify(args)
-                    }
+                    id: callId,
+                    name: toolName,
+                    arguments: JSON.stringify(args)
                 });
             });
         }

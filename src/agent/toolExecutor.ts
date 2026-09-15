@@ -7,6 +7,8 @@ import type { ToolSet } from "../tools.d/toolManager";
 import type { ToolContext } from "../tools.d/interface";
 import { ToolSession } from "../tools.d/toolSession";
 import type { AgentMessage } from "../types";
+import type { ToolCall } from "@moonshot-ai/kosong";
+import { createToolMessage } from "@moonshot-ai/kosong";
 import type { UIRenderer } from "./uiRenderer";
 import type { RenderBlock } from "../notebook/renderTypes";
 import type { IAgentSession } from "../adapters/interfaces";
@@ -89,7 +91,7 @@ export class ToolExecutor {
 	 * Executes a list of tool calls and returns the results.
 	 * @description Iterates through each tool call, builds the tool context,
 	 * executes the tool, collects results, and notifies callbacks for UI updates.
-	 * @param {any[]} toolCalls - Tool calls to execute
+	 * @param {ToolCall[]} toolCalls - Tool calls to execute
 	 * @param {AbortSignal} abortSignal - Signal for cancellation
 	 * @param {ToolExecutorCallbacks} callbacks - Callbacks for UI updates and termination
 	 * @returns {Promise<{messages: AgentMessage[], shouldTerminate: boolean}>} Tool execution results
@@ -101,7 +103,7 @@ export class ToolExecutor {
 	 * });
 	 */
 	async executeTools(
-		toolCalls: any[],
+		toolCalls: ToolCall[],
 		abortSignal: AbortSignal,
 		callbacks: ToolExecutorCallbacks,
 	): Promise<ToolExecutionResult> {
@@ -114,17 +116,15 @@ export class ToolExecutor {
 				break;
 			}
 
-			const toolName = tc.function.name;
-			const toolArgsStr = tc.function.arguments;
+			const toolName = tc.name;
+			const toolArgsStr = tc.arguments ?? '{}';
 			let toolArgs: any;
 			try {
 				toolArgs = JSON.parse(toolArgsStr);
 			} catch (err: any) {
 				toolMessages.push({
-					role: "tool",
-					tool_call_id: tc.id,
+					...createToolMessage(tc.id, `Error: invalid tool arguments JSON: ${err.message}`),
 					name: toolName,
-					content: `Error: invalid tool arguments JSON: ${err.message}`,
 				});
 				continue;
 			}
@@ -202,10 +202,8 @@ export class ToolExecutor {
 			);
 
 			toolMessages.push({
-				role: "tool",
-				tool_call_id: tc.id,
+				...createToolMessage(tc.id, toolResult),
 				name: toolName,
-				content: toolResult,
 			});
 		}
 		return { messages: toolMessages, shouldTerminate, isTaskComplete };

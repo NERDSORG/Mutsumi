@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { ToolSet } from '../tools.d/toolManager';
 import { AgentMessage } from '../types';
+import type { ContentPart, ToolCall } from '@moonshot-ai/kosong';
 import { UIRenderer } from './uiRenderer';
 import { MUTSUMI_AGENT_CHAT_MIME, RenderBlock } from '../notebook/renderTypes';
 import { LLMStreamHandler } from './llmStream';
@@ -119,7 +120,7 @@ export class AgentRunner {
 
             let roundContent = '';
             let roundReasoning = '';
-            let toolCalls: any[] = [];
+            let toolCalls: ToolCall[] = [];
 
             try {
                 const result = await this.llmStreamHandler.streamResponse(
@@ -178,23 +179,27 @@ export class AgentRunner {
                 break;
             }
 
+            // Assemble kosong content parts: think part first, then text part.
+            // Empty content normalizes to [].
+            const roundParts: ContentPart[] = [];
+            if (roundReasoning) {
+                roundParts.push({ type: 'think', think: roundReasoning });
+            }
+            if (roundContent) {
+                roundParts.push({ type: 'text', text: roundContent });
+            }
+
             if (!toolCalls.length && !roundContent && !roundReasoning) {
                 this.uiRenderer.appendBlock({ type: 'content', markdown: '_Mutsumi Debug: No content, reasoning, or tool calls received from API._' });
                 await this.session.replaceOutput(JSON.stringify(this.uiRenderer.getCommittedRenderData()), { mimeType: MUTSUMI_AGENT_CHAT_MIME });
-                const msg: AgentMessage = { role: 'assistant', content: roundContent };
-                if (roundReasoning) {
-                    msg.reasoning_content = roundReasoning;
-                }
+                const msg: AgentMessage = { role: 'assistant', content: roundParts, toolCalls: [] };
                 messages.push(msg);
                 newMessages.push(msg);
                 break;
             }
 
             if (toolCalls.length === 0) {
-                const assistantMsg: AgentMessage = { role: 'assistant', content: roundContent };
-                if (roundReasoning) {
-                    assistantMsg.reasoning_content = roundReasoning;
-                }
+                const assistantMsg: AgentMessage = { role: 'assistant', content: roundParts, toolCalls: [] };
                 messages.push(assistantMsg);
                 newMessages.push(assistantMsg);
                 break;
@@ -202,12 +207,9 @@ export class AgentRunner {
 
             const assistantMsgWithTool: AgentMessage = {
                 role: 'assistant',
-                content: roundContent || null,
-                tool_calls: toolCalls
+                content: roundParts,
+                toolCalls
             };
-            if (roundReasoning) {
-                assistantMsgWithTool.reasoning_content = roundReasoning;
-            }
             messages.push(assistantMsgWithTool);
             newMessages.push(assistantMsgWithTool);
 

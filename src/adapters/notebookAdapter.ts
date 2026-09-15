@@ -136,7 +136,8 @@ export class NotebookAgentSession implements IAgentSession {
                     // User message - store with cell metadata if any
                     history.push({
                         role: 'user',
-                        content,
+                        content: [{ type: 'text', text: content }],
+                        toolCalls: [],
                         metadata: cell.metadata
                     });
                     debugLogger.log(`[NotebookAdapter.getHistory]   - Added user message, has interaction=${!!cell.metadata?.mutsumi_interaction}`);
@@ -145,7 +146,8 @@ export class NotebookAgentSession implements IAgentSession {
                     // Do NOT expand here - buildInteractionHistory will handle expansion
                     history.push({
                         role: 'assistant',
-                        content,
+                        content: [{ type: 'text', text: content }],
+                        toolCalls: [],
                         metadata: cell.metadata
                     });
                     debugLogger.log(`[NotebookAdapter.getHistory]   - Added assistant message, has interaction=${!!cell.metadata?.mutsumi_interaction}`);

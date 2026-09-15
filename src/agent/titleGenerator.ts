@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { AgentMessage, AgentMetadata, ModelSelection } from '../types';
+import { createUserMessage, extractText } from '@moonshot-ai/kosong';
 import { LLMClient, LLMClientConfig } from './llmClient';
 import { AgentOrchestrator } from './agentOrchestrator';
 import { IAgentSession } from '../adapters/interfaces';
@@ -77,16 +78,14 @@ function createTitleGenerationMessages(messages: AgentMessage[]): AgentMessage[]
     return [
         {
             role: 'system',
-            content: 'Please generate a short title based on the following conversation content. ' +
+            content: [{ type: 'text', text: 'Please generate a short title based on the following conversation content. ' +
                 'The title should summarize the main topic of the conversation. ' +
                 'Conversation data is provided in JSON format, containing messages from user, assistant, tool roles. ' +
                 'Requirements:\n1. Length should be 10-20 characters\n2. No special characters like \\\/:*?"<>|' +
-                '\n3. Return only the title text, no explanations or prefixes'
+                '\n3. Return only the title text, no explanations or prefixes' }],
+            toolCalls: []
         },
-        {
-            role: 'user',
-            content: `Please generate a title for this conversation:\n\n${contextJson.substring(0, 4000)}`
-        }
+        createUserMessage(`Please generate a title for this conversation:\n\n${contextJson.substring(0, 4000)}`)
     ];
 }
 
@@ -142,8 +141,11 @@ export async function generateTitle(
     // The last assistant message contains the title
     const lastAssistantMsg = [...newMessages].reverse().find(m => m.role === 'assistant');
     let title = 'New Agent';
-    if (lastAssistantMsg?.content && typeof lastAssistantMsg.content === 'string') {
-        title = lastAssistantMsg.content.trim();
+    if (lastAssistantMsg) {
+        const text = extractText(lastAssistantMsg).trim();
+        if (text) {
+            title = text;
+        }
     }
 
     // Sanitize the title
@@ -165,7 +167,11 @@ export function extractMessagesFromNotebook(notebook: vscode.NotebookDocument): 
     const messages: AgentMessage[] = [];
     for (const cell of notebook.getCells()) {
         if (cell.kind === vscode.NotebookCellKind.Code) {
-            messages.push({ role: 'user', content: cell.document.getText() });
+            messages.push({
+                role: 'user',
+                content: [{ type: 'text', text: cell.document.getText() }],
+                toolCalls: []
+            });
             if (cell.metadata?.mutsumi_interaction) {
                 messages.push(...(cell.metadata.mutsumi_interaction as AgentMessage[]));
             }
