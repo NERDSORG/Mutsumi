@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import Parser = require('web-tree-sitter');
+import Parser from 'web-tree-sitter';
 import { EXT_TO_LANG, LANGUAGE_CONFIGS, LanguageConfig } from './definitions';
 
 /**

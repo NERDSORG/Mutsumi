@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import express = require('express');
+import express from 'express';
 import { HeadlessAdapter } from '../adapters/headlessAdapter';
 
 export interface HttpServerOptions {

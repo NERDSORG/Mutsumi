@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as net from 'net';
 import * as crypto from 'crypto';
-import express = require('express');
-import bodyParser = require('body-parser');
+import express from 'express';
+import bodyParser from 'body-parser';
 import { HeadlessAdapter } from '../adapters/headlessAdapter';
 import { HttpServerOptions } from './types';
 import { debugLogger } from '../debugLogger';

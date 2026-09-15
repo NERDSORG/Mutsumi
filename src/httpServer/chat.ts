@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import express = require('express');
+import express from 'express';
 import { AgentRunner } from '../agent/agentRunner';
 import { MutsumiSerializer } from '../notebook/serializer';
 import { RenderData, RenderBlock, MUTSUMI_AGENT_CHAT_MIME } from '../notebook/renderTypes';
