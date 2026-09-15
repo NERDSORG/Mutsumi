@@ -223,15 +223,12 @@ function formatSystemInfo(data: SystemInfoData): string {
 export const systemInfoTool: ITool = {
     name: 'system_info',
     definition: {
-        type: 'function',
-        function: {
-            name: 'system_info',
-            description: 'Get system information (OS, Shell, Package Manager).',
-            parameters: {
-                type: 'object',
-                properties: {},
-                required: []
-            }
+        name: 'system_info',
+        description: 'Get system information (OS, Shell, Package Manager).',
+        parameters: {
+            type: 'object',
+            properties: {},
+            required: []
         }
     },
     execute: async (_args: any, _context: ToolContext) => {
@@ -256,17 +253,14 @@ export const systemInfoTool: ITool = {
 export const getEnvVarTool: ITool = {
     name: 'get_env_var',
     definition: {
-        type: 'function',
-        function: {
-            name: 'get_env_var',
-            description: 'Read the value of a specific system environment variable.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    name: { type: 'string', description: 'The name of the environment variable (e.g. PATH, HOME).' }
-                },
-                required: ['name']
-            }
+        name: 'get_env_var',
+        description: 'Read the value of a specific system environment variable.',
+        parameters: {
+            type: 'object',
+            properties: {
+                name: { type: 'string', description: 'The name of the environment variable (e.g. PATH, HOME).' }
+            },
+            required: ['name']
         }
     },
     execute: async (args: any, context: ToolContext) => {

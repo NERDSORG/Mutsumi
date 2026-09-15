@@ -14,6 +14,7 @@ import {
 import type { HeadlessAdapter } from '../adapters/headlessAdapter';
 import type { AgentSessionConfig } from '../adapters/interfaces';
 import type { AgentMessage, AgentMetadata, ModelSelection } from '../types';
+import type { ProviderType } from '@moonshot-ai/kosong';
 
 export async function handleChat(
     req: express.Request,
@@ -112,14 +113,14 @@ export async function handleChat(
     }
 
     // Get credentials for the resolved pair.
-    let credentials: { apiKey: string; baseUrl: string };
+    let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
     try {
         credentials = getModelCredentials(effectiveSelection.model, effectiveSelection.provider);
     } catch (err: any) {
         res.status(400).json({ status: 'error', content: err.message });
         return;
     }
-    const { apiKey, baseUrl } = credentials;
+    const { apiKey, baseUrl, providerType } = credentials;
     // getModelCredentials guarantees apiKey and baseUrl are non-empty
 
     const effectiveModel = effectiveSelection.model;
@@ -242,6 +243,7 @@ export async function handleChat(
         model: effectiveModel,
         apiKey,
         baseUrl,
+        providerType,
         maxLoops,
         reasoningEffort
     };

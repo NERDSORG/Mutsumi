@@ -4,6 +4,8 @@
  */
 
 import * as vscode from 'vscode';
+import { isAbortError } from '@moonshot-ai/kosong';
+import type { ProviderType } from '@moonshot-ai/kosong';
 import { ToolSet, ToolRegistry, createToolSetForAgent } from './tools.d/toolManager';
 import { AgentRunner } from './agent/agentRunner';
 import { AgentOrchestrator } from './agent/agentOrchestrator';
@@ -120,7 +122,7 @@ export class AgentController {
         }
 
         // Get credentials for the model
-        let credentials: { apiKey: string; baseUrl: string };
+        let credentials: { apiKey: string; baseUrl: string; providerType: ProviderType };
         try {
             credentials = getModelCredentials(model, provider);
         } catch (err: any) {
@@ -138,7 +140,7 @@ export class AgentController {
             (session as any).end(false);
             return;
         }
-        const { apiKey, baseUrl } = credentials;
+        const { apiKey, baseUrl, providerType } = credentials;
 
         // Create adapter and session
         const adapter = new NotebookAdapter(controller);
@@ -179,7 +181,7 @@ export class AgentController {
 
             try {
                 const runner = new AgentRunner(
-                    { apiKey, baseUrl, model, reasoningEffort },
+                    { apiKey, baseUrl, model, providerType, reasoningEffort },
                     toolSet,
                     session
                 );
@@ -196,9 +198,8 @@ export class AgentController {
 
                 (session as any).end(true);
             } catch (err: any) {
-                const isCancellation = 
-                    err.name === 'APIUserAbortError' ||
-                    err.name === 'AbortError' || 
+                const isCancellation =
+                    isAbortError(err) ||
                     session.token.isCancellationRequested;
 
                 if (isCancellation) {

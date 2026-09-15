@@ -2,21 +2,25 @@
     "mutsumi.providers": [
         {
             "name": "moonshotai",
+            "type": "kimi",
             "baseurl": "https://api.moonshot.cn/v1",
             "api_key": "sk-XXX"
         },
         {
             "name": "deepseek",
+            "type": "openai",
             "baseurl": "https://api.deepseek.com",
             "api_key": "sk-XXX"
         },
         {
             "name": "kimi-for-coding",
+            "type": "kimi",
             "baseurl": "https://api.kimi.com/coding/v1",
             "api_key": "sk-kimi-XXX"
         },
         {
             "name": "ZenMux",
+            "type": "openai",
             "baseurl": "https://zenmux.ai/api/v1",
             "api_key": "sk-ss-v1-XXX"
         }

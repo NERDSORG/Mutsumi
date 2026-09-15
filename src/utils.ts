@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import type { ProviderType } from '@moonshot-ai/kosong';
 import {
     Provider,
     ModelSelection,
@@ -106,15 +107,15 @@ export function resolveModelSelection(selection: unknown): ResolvedModelSelectio
 /**
  * Gets the provider credentials for a given model/provider pair.
  * @description Resolves and validates the pair through resolveModelSelection,
- * then reads the API key and base URL from the matched provider entry returned
- * by that single lookup. Provider is required; no first-match fallback is
- * performed.
+ * then reads the API key, base URL and wire type from the matched provider
+ * entry returned by that single lookup. Provider is required; no first-match
+ * fallback is performed.
  * @param {string} modelName - The model identifier
  * @param {string} providerName - The provider name (required)
- * @returns {{ apiKey: string; baseUrl: string }} Provider credentials with camelCase property names
+ * @returns {{ apiKey: string; baseUrl: string; providerType: ProviderType }} Provider credentials with camelCase property names
  * @throws {Error} If provider not found, model not declared, or required fields are empty
  */
-export function getModelCredentials(modelName: string, providerName: string): { apiKey: string; baseUrl: string } {
+export function getModelCredentials(modelName: string, providerName: string): { apiKey: string; baseUrl: string; providerType: ProviderType } {
     const { provider, providerEntry } = resolveModelSelection({ model: modelName, provider: providerName });
 
     const baseUrl = providerEntry.baseurl.trim();
@@ -127,7 +128,7 @@ export function getModelCredentials(modelName: string, providerName: string): { 
         throw new Error(`Provider "${provider}" has empty api_key`);
     }
 
-    return { apiKey, baseUrl };
+    return { apiKey, baseUrl, providerType: providerEntry.type };
 }
 
 /**

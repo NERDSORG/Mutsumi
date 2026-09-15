@@ -8,21 +8,18 @@ const MAX_FILES_TO_SCAN = 100;
 export const projectOutlineTool: ITool = {
 	name: "project_outline",
 	definition: {
-		type: "function",
-		function: {
-			name: "project_outline",
-			description:
-				"Generate a structural outline of the project source code. Uses Tree-sitter parsing to identify classes, functions, and methods.",
-			parameters: {
-				type: "object",
-				properties: {
-					uri: {
-						type: "string",
-						description: "The root directory URI to scan (optional).",
-					},
+		name: "project_outline",
+		description:
+			"Generate a structural outline of the project source code. Uses Tree-sitter parsing to identify classes, functions, and methods.",
+		parameters: {
+			type: "object",
+			properties: {
+				uri: {
+					type: "string",
+					description: "The root directory URI to scan (optional).",
 				},
-				required: ["uri"],
 			},
+			required: ["uri"],
 		},
 	},
 	execute: async (args: any, _context: ToolContext) => {

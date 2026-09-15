@@ -7,17 +7,14 @@ import * as vscode from 'vscode';
 export const mkdirTool: ITool = {
     name: 'mkdir',
     definition: {
-        type: 'function',
-        function: {
-            name: 'mkdir',
-            description: 'Create a directory recursively (like `mkdir -p`). Requires User Approval.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    uri: { type: 'string', description: 'The directory path to create.' }
-                },
-                required: ['uri']
-            }
+        name: 'mkdir',
+        description: 'Create a directory recursively (like `mkdir -p`). Requires User Approval.',
+        parameters: {
+            type: 'object',
+            properties: {
+                uri: { type: 'string', description: 'The directory path to create.' }
+            },
+            required: ['uri']
         }
     },
     execute: async (args: any, context: ToolContext) => {

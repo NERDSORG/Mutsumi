@@ -7,39 +7,36 @@ import { resolveUri } from '../utils';
 export const dispatchSubagentsTool: ITool = {
     name: 'dispatch_subagents',
     definition: {
-        type: 'function',
-        function: {
-            name: 'dispatch_subagents',
-            description: 'Split into multiple parallel sub-agents. Creates new agent files immediately. The current agent will suspend until all sub-agents are finished (task_finish called) or their files are deleted.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    context_broadcast: { 
-                        type: 'string', 
-                        description: 'Broadcast context information injected into each sub-agent\'s prompt. This is copied to each sub-agent independently - sub-agents cannot communicate with each other. Must include: overall task requirements, brief description of each sub-agent\'s task, and the file URIs each sub-agent is responsible for. This ensures all sub-agents understand the global task scope and other sub-agents\' work areas to prevent unauthorized operations.' 
-                    },
-                    sub_agents: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            properties: {
-                                prompt: { type: 'string', description: 'Detailed description of this sub-agent\'s specific task content, deliverable requirements, and acceptance criteria.' },
-                                allowed_uris: { 
-                                    type: 'array', 
-                                    items: { type: 'string' },
-                                    description: 'Allowed paths.'
-                                },
-                                agent_type: {
-                                    type: 'string',
-                                    description: 'The agent type for this sub-agent (e.g., "chat", "orchestrator", "implementer", "reviewer"). The model and capabilities are determined by the agent type configuration. Defaults to "implementer" if not specified.'
-                                }
-                            },
-                            required: ['prompt', 'allowed_uris']
-                        }
-                    }
+        name: 'dispatch_subagents',
+        description: 'Split into multiple parallel sub-agents. Creates new agent files immediately. The current agent will suspend until all sub-agents are finished (task_finish called) or their files are deleted.',
+        parameters: {
+            type: 'object',
+            properties: {
+                context_broadcast: { 
+                    type: 'string', 
+                    description: 'Broadcast context information injected into each sub-agent\'s prompt. This is copied to each sub-agent independently - sub-agents cannot communicate with each other. Must include: overall task requirements, brief description of each sub-agent\'s task, and the file URIs each sub-agent is responsible for. This ensures all sub-agents understand the global task scope and other sub-agents\' work areas to prevent unauthorized operations.' 
                 },
-                required: ['context_broadcast', 'sub_agents']
-            }
+                sub_agents: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            prompt: { type: 'string', description: 'Detailed description of this sub-agent\'s specific task content, deliverable requirements, and acceptance criteria.' },
+                            allowed_uris: { 
+                                type: 'array', 
+                                items: { type: 'string' },
+                                description: 'Allowed paths.'
+                            },
+                            agent_type: {
+                                type: 'string',
+                                description: 'The agent type for this sub-agent (e.g., "chat", "orchestrator", "implementer", "reviewer"). The model and capabilities are determined by the agent type configuration. Defaults to "implementer" if not specified.'
+                            }
+                        },
+                        required: ['prompt', 'allowed_uris']
+                    }
+                }
+            },
+            required: ['context_broadcast', 'sub_agents']
         }
     },
     execute: async (args: any, context: ToolContext) => {
@@ -118,17 +115,14 @@ export const dispatchSubagentsTool: ITool = {
 export const taskFinishTool: ITool = {
     name: 'task_finish',
     definition: {
-        type: 'function',
-        function: {
-            name: 'task_finish',
-            description: 'Mark task as complete and submit report.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    context_summary: { type: 'string', description: 'Final report.' }
-                },
-                required: ['context_summary']
-            }
+        name: 'task_finish',
+        description: 'Mark task as complete and submit report.',
+        parameters: {
+            type: 'object',
+            properties: {
+                context_summary: { type: 'string', description: 'Final report.' }
+            },
+            required: ['context_summary']
         }
     },
     execute: async (args: any, context: ToolContext) => {
@@ -156,17 +150,14 @@ export const taskFinishTool: ITool = {
 export const getAgentTypesTool: ITool = {
     name: 'get_agent_types',
     definition: {
-        type: 'function',
-        function: {
-            name: 'get_agent_types',
-            description: 'Get agent types that the current agent is allowed to dispatch. Returns a filtered list of agent types with their capabilities, default models, and tool sets. Only returns types that can be created as children of the current agent.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    current_agent_type: {
-                        type: 'string',
-                        description: 'The current agent type (e.g., "implementer", "orchestrator"). If not provided, will be read from session metadata.'
-                    }
+        name: 'get_agent_types',
+        description: 'Get agent types that the current agent is allowed to dispatch. Returns a filtered list of agent types with their capabilities, default models, and tool sets. Only returns types that can be created as children of the current agent.',
+        parameters: {
+            type: 'object',
+            properties: {
+                current_agent_type: {
+                    type: 'string',
+                    description: 'The current agent type (e.g., "implementer", "orchestrator"). If not provided, will be read from session metadata.'
                 }
             }
         }

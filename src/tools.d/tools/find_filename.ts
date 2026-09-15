@@ -5,25 +5,22 @@ import * as vscode from "vscode";
 export const searchFileNameIncludesTool: ITool = {
 	name: "find_filename",
 	definition: {
-		type: "function",
-		function: {
-			name: "find_filename",
-			description:
-				'Find files whose names include the specified string. Equivalent to `find uri -name "*name_includes*"`.',
-			parameters: {
-				type: "object",
-				properties: {
-					uri: {
-						type: "string",
-						description: "The directory URI to start search.",
-					},
-					name_includes: {
-						type: "string",
-						description: "The string that filenames must contain.",
-					},
+		name: "find_filename",
+		description:
+			'Find files whose names include the specified string. Equivalent to `find uri -name "*name_includes*"`.',
+		parameters: {
+			type: "object",
+			properties: {
+				uri: {
+					type: "string",
+					description: "The directory URI to start search.",
 				},
-				required: ["uri", "name_includes"],
+				name_includes: {
+					type: "string",
+					description: "The string that filenames must contain.",
+				},
 			},
+			required: ["uri", "name_includes"],
 		},
 	},
 	execute: async (args: any, context: ToolContext) => {

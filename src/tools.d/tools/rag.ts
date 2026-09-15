@@ -20,25 +20,22 @@ import { RagService } from '../../codebase/rag/service';
 export const queryCodebaseTool: ITool = {
     name: 'query_codebase',
     definition: {
-        type: 'function',
-        function: {
-            name: 'query_codebase',
-            description: 'Query the codebase using natural language to find semantically relevant code. This is the PRIMARY tool for answering questions like "what code does X", "where is Y implemented", "find code related to Z", or "which files contain...". Uses AI-powered semantic search to understand concepts, not just match text.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    question: {
-                        type: 'string',
-                        description: 'Natural language question about the codebase. Examples: "how is file saving implemented", "where are errors handled", "find authentication code", "哪些文件处理用户输入", "修复了什么的代码在哪里"'
-                    },
-                    max_results: {
-                        type: 'number',
-                        description: 'Maximum number of code chunks to return (default: 10, max: 50)',
-                        default: 10
-                    }
+        name: 'query_codebase',
+        description: 'Query the codebase using natural language to find semantically relevant code. This is the PRIMARY tool for answering questions like "what code does X", "where is Y implemented", "find code related to Z", or "which files contain...". Uses AI-powered semantic search to understand concepts, not just match text.',
+        parameters: {
+            type: 'object',
+            properties: {
+                question: {
+                    type: 'string',
+                    description: 'Natural language question about the codebase. Examples: "how is file saving implemented", "where are errors handled", "find authentication code", "哪些文件处理用户输入", "修复了什么的代码在哪里"'
                 },
-                required: ['question']
-            }
+                max_results: {
+                    type: 'number',
+                    description: 'Maximum number of code chunks to return (default: 10, max: 50)',
+                    default: 10
+                }
+            },
+            required: ['question']
         }
     },
     execute: async (args: any, context: ToolContext) => {

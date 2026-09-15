@@ -6,22 +6,19 @@ import { TextDecoder } from 'util';
 export const readFileTool: ITool = {
     name: 'read',
     definition: {
-        type: 'function',
-        function: {
-            name: 'read',
-            description: 'Read the contents of a file at the given URI. Pass optional "range" to read only a specific line range.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    uri: { type: 'string', description: 'The file URI or path to read.' },
-                    range: {
-                        type: 'array',
-                        items: { type: 'integer' },
-                        description: 'Optional line range [start, end] (1-based, inclusive). When provided, only those lines are returned, each prefixed with its line number.'
-                    }
-                },
-                required: ['uri']
-            }
+        name: 'read',
+        description: 'Read the contents of a file at the given URI. Pass optional "range" to read only a specific line range.',
+        parameters: {
+            type: 'object',
+            properties: {
+                uri: { type: 'string', description: 'The file URI or path to read.' },
+                range: {
+                    type: 'array',
+                    items: { type: 'integer' },
+                    description: 'Optional line range [start, end] (1-based, inclusive). When provided, only those lines are returned, each prefixed with its line number.'
+                }
+            },
+            required: ['uri']
         }
     },
     execute: async (args: any, context: ToolContext) => {
