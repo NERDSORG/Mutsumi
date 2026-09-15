@@ -9,21 +9,7 @@ import { RenderBlock, RenderData } from '../notebook/renderTypes';
 import { tryParsePartialJson } from './utils';
 import type { ToolCall } from '@moonshot-ai/kosong';
 import type { ToolSet } from '../tools.d/toolManager';
-
-/**
- * Point-in-time render state captured at round start.
- * @description Used by the retry loop to roll the UI back so a retried
- * attempt renders as if the previous attempt never happened.
- * @interface RoundSnapshot
- */
-export interface RoundSnapshot {
-    /** Length of the committed block list at snapshot time */
-    committedLength: number;
-    /** L2 lock state at snapshot time */
-    reasoningLocked: boolean;
-    /** L2 lock state at snapshot time */
-    contentLocked: boolean;
-}
+import type { RoundSnapshot } from './interfaces';
 
 /**
  * Accumulates agent output as structured render blocks.

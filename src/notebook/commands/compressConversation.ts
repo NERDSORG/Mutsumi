@@ -10,7 +10,7 @@ import type { ProviderType } from '@moonshot-ai/kosong';
 import { LiteAdapter, LiteAgentSessionConfig } from '../../adapters/liteAdapter';
 import { buildInteractionHistory } from '../../contextManagement/history';
 import { createEmptyToolSet } from '../../tools.d/toolManager';
-import type { AgentRunOptions } from '../../agent/types';
+import type { AgentRunOptions } from '../../agent/interfaces';
 import { MutsumiSerializer } from '../serializer';
 import { formatMessagesToString, createDebugSessionFromNotebook } from './utils';
 import { getCompressModelSelection, getModelCredentials, resolveModelSelection } from '../../utils';

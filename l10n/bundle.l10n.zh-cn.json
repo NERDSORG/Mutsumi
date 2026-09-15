@@ -113,7 +113,7 @@
 	"selectModel.effortDefault": "默认",
 	"selectModel.effortDefaultDesc": "不发送；由服务器决定",
 	"selectModel.current": "当前",
-	"selectModel.effort.none": "禁用推理",
+	"selectModel.effort.off": "禁用推理",
 	"selectModel.effort.minimal": "最小推理",
 	"selectModel.effort.low": "低推理",
 	"selectModel.effort.medium": "中等推理",

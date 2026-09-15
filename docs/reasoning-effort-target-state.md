@@ -1,6 +1,6 @@
 # Reasoning Effort 支持 — 最终目标状态文档
 
-> 状态：**已冻结**（2026-09-15，v1.3）。本文档是 planner / implementer / reviewer 的唯一权威依据。
+> 状态：**已冻结**（2026-09-16，v1.4）。本文档是 planner / implementer / reviewer 的唯一权威依据。
 > 任何实现中暴露的偏差，必须先修订本文档，再调整实现。
 
 ---
@@ -17,10 +17,10 @@ Mutsumi 支持统一的 `reasoning_effort` 字段，覆盖全部 LLM 调用路�
 
 | # | 决策 |
 |---|---|
-| D1 | 取值集合暴露厂商超集 + `default`：`'default' \| 'none' \| 'minimal' \| 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'`。`default` = **根本不发送** `reasoning_effort` 字段（由服务器决定行为）。 |
-| D2 | 不提供 thinking 开关（`thinking.type` 等布尔开关不进入配置面）。`none` 是唯一的"关闭思考"表达，经 kosong `withThinking('off')` 下发，具体线编码由 kosong 适配器决定（openai 线未配置 `offEffort` 时不发字段；kimi 线发 `extra_body.thinking={type:'disabled'}`）；若 provider 实际无法关闭或报错，由用户改用其他值。 |
-| D3 | 发送面统一走 kosong `withThinking` morph（v1.3 起，废除"仅顶层透传、零特化"）。映射规则（写在 AgentRunner 构造器一处）：`'none' → withThinking('off')`（唯一的值翻译）；其他具体值原样 `withThinking(值)`；`default`/缺省 + openai 线 → `withThinking('off')`；`default`/缺省 + 其他线 → 不调 morph。理由：① openai 适配器在历史含 ThinkPart 且未配置 effort 时会自动补发 `reasoning_effort='medium'`（One API 类校验兼容），不抑制则"default=不发送"契约在第二轮起被静默打破；`withThinking('off')` 在未配置 `offEffort` 时线上**不发任何字段**，与旧行为逐字节等价且恰好跳过自动启用分支。② kimi 线不能同样抑制：`withThinking('off')` 会主动发 `extra_body.thinking={type:'disabled'}`——那是"关闭"而非"默认"，破坏服务端默认行为；default 分支按线型分流是 withThinking 语义决定的**必要**特化，不是冗余。③ 具体值线结果：openai 线 = 顶层 `reasoning_effort` 原样（与旧行为等价）；kimi 线 = `extra_body.thinking={type:'enabled',effort}`；anthropic/google 线 = kosong 原生映射。仍不做 baseurl 启发式识别，不加 provider 级配置字段。 |
-| D4 | 配置层级只有一级：每 agent 覆盖（`notebook.metadata.reasoning_effort`，持久化于 `.mtm`）。**不提供全局档位设置——全局行为固定为 default（不发送字段）**。理由（用户拍板）：档位取值是模型相关的（GLM-5.2 无 `low`、DeepSeek 无 `none`、Kimi 强制思考），而各会话模型异构，任何全局具体档位都必然在某些会话变成非法值。**无** agent-type 级默认；**无**父子 agent 继承。 |
+| D1 | 取值集合暴露厂商超集 + `default`：`'default' \| 'off' \| 'minimal' \| 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'`。`default` = **根本不发送** `reasoning_effort` 字段（由服务器决定行为）。 |
+| D2 | 不提供 thinking 开关（`thinking.type` 等布尔开关不进入配置面）。`off` 是唯一的"关闭思考"表达（v1.4 起与 kosong `withThinking` 保留字同名），经 kosong `withThinking('off')` 逐字下发，具体线编码由 kosong 适配器决定（openai 线未配置 `offEffort` 时不发字段；kimi 线发 `extra_body.thinking={type:'disabled'}`）；若 provider 实际无法关闭或报错，由用户改用其他值。 |
+| D3 | 发送面统一走 kosong `withThinking` morph（v1.3 起，废除"仅顶层透传、零特化"；v1.4 起词表 `'none'` 更名 `'off'`，值翻译随之消失）。映射规则（写在 AgentRunner 构造器一处）：**任意具体值（含 `'off'`）原样 `withThinking(值)`，零值翻译**；`default`/缺省 + openai 线 → `withThinking('off')`；`default`/缺省 + 其他线 → 不调 morph。理由：① openai 适配器在历史含 ThinkPart 且未配置 effort 时会自动补发 `reasoning_effort='medium'`（One API 类校验兼容），不抑制则"default=不发送"契约在第二轮起被静默打破；`withThinking('off')` 在未配置 `offEffort` 时线上**不发任何字段**，与旧行为逐字节等价且恰好跳过自动启用分支。② kimi 线不能同样抑制：`withThinking('off')` 会主动发 `extra_body.thinking={type:'disabled'}`——那是"关闭"而非"默认"，破坏服务端默认行为；default 分支按线型分流是 withThinking 语义决定的**必要**特化，不是冗余。③ 具体值线结果：openai 线 = 顶层 `reasoning_effort` 原样（与旧行为等价；`'off'` 发 `offEffort`，未配置则不发字段）；kimi 线 = `extra_body.thinking={type:'enabled',effort}`（`'off'` 编码为 `{type:'disabled'}`）；anthropic/google 线 = kosong 原生映射。仍不做 baseurl 启发式识别，不加 provider 级配置字段。 |
+| D4 | 配置层级只有一级：每 agent 覆盖（`notebook.metadata.reasoning_effort`，持久化于 `.mtm`）。**不提供全局档位设置——全局行为固定为 default（不发送字段）**。理由（用户拍板）：档位取值是模型相关的（GLM-5.2 无 `low`、DeepSeek 无 `off`、Kimi 强制思考），而各会话模型异构，任何全局具体档位都必然在某些会话变成非法值。**无** agent-type 级默认；**无**父子 agent 继承。 |
 | D5 | title 生成 / 对话压缩等内部 runner **一律不发送**该字段（相当于强制 default），因为我们不知道用户的辅助模型支持哪些档位。推论：**reasoning_effort 的解析逻辑只能放在调用方（controller.ts / httpServer/chat.ts），AgentRunner 与 provider 构造层绝不自行读取与 reasoning effort 相关的任何配置**。（注：AgentRunner 中既有的 `titleGeneratorModel` 配置读取属本任务之前的存量行为，与 effort 无关，不在本禁令范围内。）withThinking 语义（v1.3）下的实现方式：内部 runner 本来就不传 `reasoningEffort`，自动落入 D3 的 default 分支（openai 线被 `withThinking('off')` 抑制为不发字段；kimi 线不 morph = 服务端默认）——不给内部 runner 开"例外通道"。 |
 | D6 | 服务器 400（取值不被模型接受）→ 按现状错误路径直接弹出（通知 + error block），不自动剥离参数重试。 |
 | D7 | HTTP server 新增取/改思考等级的端点，且**必须作用在 adapter 接口的抽象函数上**：headless adapter 直接读写裸 `.mtm` 文件；notebook adapter 在文档已打开时走 VSCode WorkspaceEdit（尊重脏缓冲区），未打开时回退为直接文件读写。 |
@@ -32,7 +32,7 @@ Mutsumi 支持统一的 `reasoning_effort` 字段，覆盖全部 LLM 调用路�
 
 ```typescript
 // 具体档位（会真实发送给服务器的值）
-type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+type ReasoningEffort = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 // 用户可配置的全集（含"不发送"语义）
 type ReasoningEffortSetting = ReasoningEffort | 'default';
 // 单一事实源常量，供 QuickPick / HTTP 校验 / package.json enum 对齐
@@ -65,8 +65,7 @@ interface AgentRunOptions { /* ... */ providerType: ProviderType; reasoningEffor
 
 // AgentRunner 构造器：createProvider({ type: providerType, model, apiKey, baseUrl, ... })
 // 之后按 D3 映射表 morph：
-//   effort === 'none'        → provider = provider.withThinking('off')
-//   effort 为其他具体值       → provider = provider.withThinking(值原样)
+//   effort 为具体值（含 'off'）→ provider = provider.withThinking(值原样)  // 零值翻译（v1.4）
 //   effort undefined 且 openai 线 → provider = provider.withThinking('off')  // 抑制自动启用，线上不发字段
 //   effort undefined 且其他线   → 不调 withThinking（服务端默认）
 // withThinking 返回浅拷贝，必须把返回值赋回去；禁止 deep clone（会断 _client / 方言共享）。
@@ -172,6 +171,7 @@ body 新增可选 reasoning_effort：同一值域校验，瞬态覆盖本次请�
 | 场景 | 行为 |
 |---|---|
 | 手改 `.mtm` 写入非法值 | 原样透传 → 服务器 400 → 按 D6 弹出，用户自行修正（归一化函数不得静默丢弃未知值） |
+| 旧版 `.mtm` 持久化的 `reasoning_effort: 'none'`（v1.4 前词表） | **有意不兼容**：`'none'` 已非合法档位；归一化不丢弃未知值 → 经 `withThinking('none')` 逐字透传，kosong 将其视作模型声明值原样发出 → 服务端校验报错按 D6 弹出，用户在 QuickPick 重选 `off` 即恢复。不提供代码内迁移或兼容映射 |
 | HTTP PUT 时 notebook 已打开且有未保存改动 | notebook 侧 WorkspaceEdit 修改内存 metadata，脏状态语义由 VSCode 管理 |
 | HTTP PUT 时 notebook 未打开 | 回退直接写 `.mtm` 文件 |
 | 执行中（run 进行中）修改 effort | 仅影响**下一次**执行；当前 run 的 provider 已构造，不热更新（与 model 现状一致） |
@@ -232,3 +232,13 @@ body 新增可选 reasoning_effort：同一值域校验，瞬态覆盖本次请�
     §7 "LLMClient 已构造"措辞、§8 "一切 provider 特化映射"收窄为"D3 映射表之外的宿主侧特化"并新增 `offEffort` 不引入条目。
   - **不变面确认**：UI 档位列表（QuickPick）、`normalizeReasoningEffort`、metadata `reasoning_effort` 字段、
     HTTP GET/PUT 端点签名、i18n、package.json——全部不动。
+- **v1.4（2026-09-16，M4.1 词表统一）**：
+  - **D1/D2/D3 词表修订**：具体档位 `'none'` 更名为 `'off'`，与 kosong `withThinking` 保留字对齐
+    （界面档位顺序：`default, off, minimal, low, medium, high, xhigh, max`）。
+    runner 映射随之塌缩为"具体值逐字透传 + default 分支按线型分流"，`'none' → withThinking('off')`
+    值翻译分支删除。
+  - **旧值 `'none'` 有意不兼容**：旧 `.mtm` 持久化的 `reasoning_effort: 'none'` 将被逐字透传
+    （kosong 视作模型声明值，§7 新增边界行），服务端报错可见、用户重选 `off` 即可；
+    不提供迁移器或兼容映射。
+  - 连带：QuickPick 描述 key `selectModel.effort.none` → `selectModel.effort.off`（picker label
+    直接显示原始值 `off`）；HTTP 校验消费 `REASONING_EFFORT_SETTING_VALUES` 常量数组自动跟随，端点零改动。
