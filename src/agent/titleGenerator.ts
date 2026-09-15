@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { AgentMessage, AgentMetadata, ModelSelection } from '../types';
+import { AgentMessage, AgentMetadata } from '../types';
 import { createUserMessage, extractText } from '@moonshot-ai/kosong';
 import type { ProviderType } from '@moonshot-ai/kosong';
 import { AgentOrchestrator } from './agentOrchestrator';
@@ -12,7 +12,7 @@ import { IAgentSession } from '../adapters/interfaces';
 import { LiteAdapter } from '../adapters/liteAdapter';
 import { createEmptyToolSet } from '../tools.d/toolManager';
 import { getModelCredentials, getTitleModelSelection, resolveModelSelection } from '../utils';
-import type { AgentRunOptions } from './types';
+import type { AgentRunOptions, GenerateTitleConfig, TitleGeneratorConfig } from './interfaces';
 
 /**
  * Creates a deep clone of an object.
@@ -21,15 +21,6 @@ import type { AgentRunOptions } from './types';
  */
 function deepClone<T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
-}
-
-/**
- * Configuration interface for title generation.
- * @interface TitleGeneratorConfig
- */
-export interface TitleGeneratorConfig {
-    /** Model selection pair to use for title generation */
-    modelSelection?: ModelSelection;
 }
 
 /**
@@ -87,21 +78,6 @@ function createTitleGenerationMessages(messages: AgentMessage[]): AgentMessage[]
         },
         createUserMessage(`Please generate a title for this conversation:\n\n${contextJson.substring(0, 4000)}`)
     ];
-}
-
-/**
- * Self-contained configuration for a title generation run.
- * @interface GenerateTitleConfig
- */
-export interface GenerateTitleConfig {
-    /** API key for the resolved provider */
-    apiKey: string;
-    /** Base URL for the provider's API */
-    baseUrl: string | undefined;
-    /** Model identifier to use */
-    model: string;
-    /** Wire protocol type of the resolved provider */
-    providerType: ProviderType;
 }
 
 /**

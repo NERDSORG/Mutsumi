@@ -113,7 +113,7 @@
 	"selectModel.effortDefault": "Default",
 	"selectModel.effortDefaultDesc": "Don't send; server decides",
 	"selectModel.current": "Current",
-	"selectModel.effort.none": "Disable reasoning",
+	"selectModel.effort.off": "Disable reasoning",
 	"selectModel.effort.minimal": "Minimal reasoning",
 	"selectModel.effort.low": "Low reasoning",
 	"selectModel.effort.medium": "Medium reasoning",

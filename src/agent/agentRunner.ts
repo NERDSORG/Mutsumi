@@ -11,17 +11,15 @@ import type { ChatProvider, Message, ProviderConfig } from '@moonshot-ai/kosong'
 import { UIRenderer } from './uiRenderer';
 import { MUTSUMI_AGENT_CHAT_MIME, RenderBlock } from '../notebook/renderTypes';
 import { streamGenerate } from './generateStream';
-import type { StreamGenerateResult } from './generateStream';
+import type { StreamGenerateResult } from './interfaces';
 import { ToolExecutor } from './toolExecutor';
 import { TitleGenerator } from './titleGenerator';
 import { IAgentSession, AgentSessionConfig } from '../adapters/interfaces';
 import { LiteAgentSession } from '../adapters/liteAdapter';
 import { debugLogger } from '../debugLogger';
 import { getTitleModelSelection } from '../utils';
-import { AgentRunOptions } from './types';
+import type { AgentRunOptions } from './interfaces';
 import { t } from '../i18n';
-
-export { AgentRunOptions } from './types';
 
 /**
  * Executes the main agent loop for LLM interactions.
@@ -74,8 +72,9 @@ export class AgentRunner {
         } as ProviderConfig);
 
         // reasoning_effort → withThinking mapping (frozen contract):
-        // - 'none' → withThinking('off') (the only value translation)
-        // - other concrete values → passed through verbatim
+        // - any concrete value (including 'off') → withThinking(value), passed
+        //   through verbatim; kosong treats unrecognized values as model-declared
+        //   efforts, so server validation errors stay visible to the user.
         // - default (undefined) on the openai wire → withThinking('off'):
         //   suppresses the adapter's auto-enable (it would otherwise send
         //   reasoning_effort='medium' once history contains think parts);
@@ -85,9 +84,7 @@ export class AgentRunner {
         //   withThinking('off') would actively send thinking=disabled, which
         //   is "off", not "default", so it must not be used for suppression).
         const effort = options.reasoningEffort;
-        if (effort === 'none') {
-            this.provider = this.provider.withThinking('off');
-        } else if (effort !== undefined) {
+        if (effort !== undefined) {
             this.provider = this.provider.withThinking(effort);
         } else if (options.providerType === 'openai') {
             this.provider = this.provider.withThinking('off');

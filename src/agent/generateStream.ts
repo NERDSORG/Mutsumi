@@ -15,43 +15,8 @@ import {
     isAbortError,
     isRetryableGenerateError
 } from '@moonshot-ai/kosong';
-import type { ChatProvider, Message, Tool, ToolCall } from '@moonshot-ai/kosong';
-
-/**
- * Options for a single streamed generation round.
- * @interface StreamGenerateOptions
- */
-export interface StreamGenerateOptions {
-    /** kosong chat provider (one per AgentRunner instance) */
-    provider: ChatProvider;
-    /** System prompt extracted at the send boundary */
-    systemPrompt: string;
-    /** Conversation history with all system messages already stripped */
-    history: Message[];
-    /** Tool definitions (kosong wire schema) */
-    tools: Tool[];
-    /** Abort signal for cancellation */
-    signal: AbortSignal;
-    /** Per-part display progress callback (accumulated values, not deltas) */
-    onProgress?: (content: string, reasoning: string, pendingTools: ToolCall[]) => void | Promise<void>;
-    /** Fired before every retry attempt (after the first) so the UI can roll the round back */
-    onRetry?: () => void;
-}
-
-/**
- * Result of a successful streamed generation round.
- * @interface StreamGenerateResult
- */
-export interface StreamGenerateResult {
-    /** kosong-assembled authoritative assistant message — the ONLY history source */
-    message: Message;
-    /** Display accumulator: round content (for commitRoundUI) */
-    roundContent: string;
-    /** Display accumulator: round reasoning (for commitRoundUI) */
-    roundReasoning: string;
-    /** Provider trace id (Kimi/KFC only), for debug logging */
-    traceId: string | null;
-}
+import type { ToolCall } from '@moonshot-ai/kosong';
+import type { StreamGenerateOptions, StreamGenerateResult } from './interfaces';
 
 /** Maximum number of retry attempts for failed requests */
 const MAX_RETRIES = 3;

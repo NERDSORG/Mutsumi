@@ -32,7 +32,7 @@ type SelectModelQuickPickItem = ModelQuickPickItem | ReasoningEffortQuickPickIte
 
 /** Human-readable descriptions for concrete reasoning effort levels. */
 const reasoningEffortDescriptions: Readonly<Record<Exclude<ReasoningEffortSetting, 'default'>, string>> = {
-    none: t('selectModel.effort.none'),
+    off: t('selectModel.effort.off'),
     minimal: t('selectModel.effort.minimal'),
     low: t('selectModel.effort.low'),
     medium: t('selectModel.effort.medium'),
