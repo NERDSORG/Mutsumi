@@ -284,6 +284,7 @@ Open your `settings.json` and add:
 "mutsumi.providers": [
     {
         "name": "kimi-for-coding",
+        "type": "kimi",
         "baseurl": "https://api.kimi.com/coding/v1",
         "api_key": "sk-kimi-XXXXXXXXXXXXXXXXXXXXXX"
     }

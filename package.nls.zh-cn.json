@@ -39,8 +39,9 @@
 	"command.removeShellTask.title": "移除",
 
 	"configuration.title": "Mutsumi",
-	"configuration.providers.markdownDescription": "已配置的 LLM API 提供商\n\n示例：\n```json\n\"mutsumi.providers\": [\n    {\n        \"name\": \"kimi-for-coding\",\n        \"baseurl\": \"https://api.kimi.com/coding/v1\",\n        \"api_key\": \"sk-kimi-XXXXXXXXXXXXXXXXXXXXXX\"\n    }\n]\n```",
+	"configuration.providers.markdownDescription": "已配置的 LLM API 提供商\n\n示例：\n```json\n\"mutsumi.providers\": [\n    {\n        \"name\": \"kimi-for-coding\",\n        \"type\": \"kimi\",\n        \"baseurl\": \"https://api.kimi.com/coding/v1\",\n        \"api_key\": \"sk-kimi-XXXXXXXXXXXXXXXXXXXXXX\"\n    }\n]\n```",
 	"configuration.providers.items.name.markdownDescription": "LLM API 提供商名称（例如 OpenAI、Anthropic、llama.cpp）",
+	"configuration.providers.items.type.markdownDescription": "此提供商的线协议类型，决定使用哪种 API 方言与端点通信。可选值：`kimi`（Moonshot/Kimi 线）、`openai`（OpenAI 兼容 chat completions 端点——DeepSeek、vLLM、LiteLLM、One API、OpenRouter、llama.cpp 等）、`openai_responses`（OpenAI Responses API）、`anthropic`（Anthropic 原生 API）、`google-genai`（Google Gemini API）、`vertexai`（Google Vertex AI）",
 	"configuration.providers.items.baseurl.markdownDescription": "LLM API BaseURL（例如 https://api.openai.com/v1、http://localhost:8080/v1）",
 	"configuration.providers.items.api_key.markdownDescription": "LLM API 密钥（必填，本地无鉴权部署可使用占位值）",
 	"configuration.models.markdownDescription": "提供商到模型的映射。键为 `mutsumi.providers` 中的提供商名称，值为该提供商支持的模型标识符数组。**请直接在 `settings.json` 中编辑此项。**\n\n示例：\n```json\n\"mutsumi.models\": {\n    \"Baidu Qianfan\": [\n        \"glm-5.2\",\n        \"deepseek-v4-flash\"\n    ],\n    \"Alibaba Tokenplan\": [\n        \"glm-5.2\",\n        \"deepseek-v4-flash\"\n    ]\n}\n```",

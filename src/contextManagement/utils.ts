@@ -5,12 +5,8 @@ import { AgentMessage } from "../types";
 import { TextDecoder } from "util";
 import { ToolManager } from "../tools.d/toolManager";
 import type { ToolContext } from "../tools.d/interface";
-import {
-	type MessageContent,
-	type ContentPartText,
-	type ContentPartImage,
-	ContextItem,
-} from "../types";
+import type { ContentPart } from "@moonshot-ai/kosong";
+import { ContextItem } from "../types";
 import { LiteAdapter } from "../adapters/liteAdapter";
 import { ToolSession } from "../tools.d/toolSession";
 import { withPreExecution } from "../tools.d/permission";
@@ -58,18 +54,19 @@ export async function readImageAsBase64(
 }
 
 /**
- * Parse user message text and convert embedded images to multimodal content
+ * Parse user message text and convert embedded images to multimodal content.
+ * Always returns ContentPart[] — plain text becomes a single text part.
  */
 export async function parseUserMessageWithImages(
 	text: string,
-): Promise<MessageContent> {
+): Promise<ContentPart[]> {
 	const matches = [...text.matchAll(IMG_REGEX)];
 
 	if (matches.length === 0) {
-		return text;
+		return [{ type: "text", text }];
 	}
 
-	const content: (ContentPartText | ContentPartImage)[] = [];
+	const content: ContentPart[] = [];
 	let lastIndex = 0;
 
 	for (const match of matches) {
@@ -88,9 +85,8 @@ export async function parseUserMessageWithImages(
 			if (imageBase64) {
 				content.push({
 					type: "image_url",
-					image_url: {
+					imageUrl: {
 						url: imageBase64,
-						detail: "auto",
 					},
 				});
 			} else {
@@ -118,26 +114,14 @@ export async function parseUserMessageWithImages(
  * Strip ghost block from content before storing in history
  * Ensures the ghost block doesn't get persisted to notebook file
  */
-export function stripGhostBlock(content: MessageContent): MessageContent {
-	if (typeof content === "string") {
-		const index = content.indexOf(GHOST_BLOCK_MARKER);
-		if (index !== -1) {
-			return content.substring(0, index).trimEnd();
+export function stripGhostBlock(content: ContentPart[]): ContentPart[] {
+	// Filter out text parts containing the ghost block marker
+	return content.filter((part) => {
+		if (part.type === "text") {
+			return !part.text.includes(GHOST_BLOCK_MARKER);
 		}
-		return content;
-	}
-
-	// For array content, filter out text parts containing ghost block
-	if (Array.isArray(content)) {
-		return content.filter((part) => {
-			if (part.type === "text") {
-				return !part.text.includes(GHOST_BLOCK_MARKER);
-			}
-			return true;
-		});
-	}
-
-	return content;
+		return true;
+	});
 }
 
 /**

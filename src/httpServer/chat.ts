@@ -208,7 +208,11 @@ export async function handleChat(
     (session as any).setInput(prompt);
 
     // Append user message to history
-    const userMessage: AgentMessage = { role: 'user', content: prompt };
+    const userMessage: AgentMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: prompt }],
+        toolCalls: []
+    };
 
     // Get existing history and append new user message
     const history = await session.getHistory();
@@ -324,7 +328,8 @@ export async function handleChat(
             // Append error as assistant message
             const errorMessage: AgentMessage = {
                 role: 'assistant',
-                content: `> ⚠️ **Error**: ${error.message || String(error)}\n\n*Execution failed.*`
+                content: [{ type: 'text', text: `> ⚠️ **Error**: ${error.message || String(error)}\n\n*Execution failed.*` }],
+                toolCalls: []
             };
             const errorHistory = [...history, errorMessage];
             (session as any).setHistory(errorHistory);
@@ -352,7 +357,8 @@ export async function handleChat(
                 // Append error as assistant message
                 const errorMessage: AgentMessage = {
                     role: 'assistant',
-                    content: `> ⚠️ **Error**: ${error.message || String(error)}\n\n*Execution failed.*`
+                    content: [{ type: 'text', text: `> ⚠️ **Error**: ${error.message || String(error)}\n\n*Execution failed.*` }],
+                    toolCalls: []
                 };
                 const errorHistory = [...history, errorMessage];
                 (session as any).setHistory(errorHistory);

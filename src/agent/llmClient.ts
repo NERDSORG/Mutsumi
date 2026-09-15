@@ -7,7 +7,6 @@
  */
 
 import OpenAI from 'openai';
-import { AgentMessage } from '../types';
 
 /**
  * Configuration for LLM client.
@@ -31,8 +30,8 @@ export interface LLMClientConfig {
  * @interface ChatCompletionOptions
  */
 export interface ChatCompletionOptions {
-    /** Messages for the conversation */
-    messages: AgentMessage[];
+    /** Messages for the conversation (projected OpenAI wire messages, see agent/openaiProjection.ts) */
+    messages: any[];
     /** Tools/functions available to the model */
     tools?: any[];
     /** Force specific tool choice */
