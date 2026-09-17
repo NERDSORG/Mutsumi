@@ -1,15 +1,17 @@
 import * as vscode from 'vscode';
-import { ApprovalTreeItem } from './approvalTreeItem';
-import { approvalManager } from '../tools.d/permission';
+import { ApprovalTreeItem, DispatchTreeItem } from './approvalTreeItem';
+import type { AgentBackend } from '../backend/agentBackend';
 
 /**
  * Union type for tree items in the approval sidebar
  */
-export type ApprovalSidebarItem = ApprovalTreeItem;
+export type ApprovalSidebarItem = ApprovalTreeItem | DispatchTreeItem;
 
 /**
- * @description Approval request tree data provider, implements VSCode TreeDataProvider interface
- * Responsible for managing the list of approval requests
+ * @description Approval request tree data provider: the always-on fallback
+ * frontend for approvals. Shows tool approval requests (from the backend
+ * ApprovalRequestManager) and pending dispatch approvals (from the backend
+ * DispatchSessionManager).
  * @class ApprovalTreeDataProvider
  * @implements {vscode.TreeDataProvider<ApprovalSidebarItem>}
  */
@@ -20,54 +22,37 @@ export class ApprovalTreeDataProvider implements vscode.TreeDataProvider<Approva
     /** @description Tree data change event that VSCode subscribes to for view updates */
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    /**
-     * @description Creates approval request data provider instance
-     * Automatically subscribes to approvalManager's change events to maintain data synchronization
-     */
-    constructor() {
-        approvalManager.onDidChangeRequests(() => {
-            this.refresh();
-        });
+    constructor(private readonly backend: AgentBackend) {
+        this.backend.approvals.onDidChangeRequests(() => this.refresh());
+        this.backend.dispatches.onDidChange(() => this.refresh());
     }
 
-    /**
-     * @description Gets the tree item for the specified element
-     * @param {ApprovalSidebarItem} element - The tree node to get
-     * @returns {vscode.TreeItem} Corresponding VSCode tree item
-     */
     getTreeItem(element: ApprovalSidebarItem): vscode.TreeItem {
         return element;
     }
 
-    /**
-     * @description Gets child nodes of the specified element
-     * @param {ApprovalSidebarItem} [element] - Parent node, this is a flat list, always returns empty array for children
-     * @returns {Thenable<ApprovalSidebarItem[]>} Promise of child node array
-     */
     getChildren(element?: ApprovalSidebarItem): Thenable<ApprovalSidebarItem[]> {
         if (element) {
             return Promise.resolve([]);
         }
 
-        // Get all approval requests
-        const requests = approvalManager.getAllRequests();
-        requests.sort((a, b) => {
-            // Pending status requests are displayed first
-            if (a.status === 'pending' && b.status !== 'pending') return -1;
-            if (a.status !== 'pending' && b.status === 'pending') return 1;
-            // Under the same status, newer requests are listed first
-            return b.timestamp.getTime() - a.timestamp.getTime();
-        });
-        
-        const items = requests.map(r => new ApprovalTreeItem(r));
+        const items: ApprovalSidebarItem[] = [];
+
+        // Pending dispatch approvals first
+        for (const dispatch of this.backend.dispatches.getPendingDispatches()) {
+            items.push(new DispatchTreeItem(dispatch));
+        }
+
+        // Approval records (already sorted: pending first, newer first)
+        for (const record of this.backend.approvals.getAllRequests()) {
+            items.push(new ApprovalTreeItem(record));
+        }
 
         return Promise.resolve(items);
     }
 
     /**
      * @description Refreshes the approval request tree view
-     * Triggers onDidChangeTreeData event to notify VSCode to re-render the view
-     * @returns {void}
      */
     public refresh(): void {
         this._onDidChangeTreeData.fire(null);

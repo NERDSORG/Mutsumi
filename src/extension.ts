@@ -1,80 +1,56 @@
 /**
  * @fileoverview Main extension entry point for Mutsumi VSCode extension.
  * @module extension
+ *
+ * Assembly point: initializes logging, the tool registry, the agent-type
+ * configuration system, MCP, skills and RAG, then the AgentBackend (the sole
+ * state authority), the frontend adapters, the sidebar, and the notification
+ * micro-frontend.
  */
 
 import * as vscode from "vscode";
 import * as path from "path";
-import * as crypto from "crypto";
-import { MutsumiSerializer } from "./notebook/serializer";
-import { AgentController } from "./controller";
+import { v4 as uuidv4 } from "uuid";
 import { AgentSidebarProvider } from "./sidebar/agentSidebar";
-import { AgentOrchestrator } from "./agent/agentOrchestrator";
 import { activateEditSupport } from "./tools.d/edit_file";
 
-import { ReferenceCompletionProvider } from "./notebook/completionProvider";
 import { CodebaseService } from "./codebase/service";
 import { RagService } from "./codebase/rag/service";
-import {
-	initializeRules,
-	collectRulesRecursively,
-} from "./contextManagement/prompts";
-import { ImagePasteProvider } from "./contextManagement/imagePasteProvider";
 import { SkillManager } from "./contextManagement/skillManager";
-import { sanitizeFileName } from "./utils";
 import { t } from "./i18n";
-import { registerToolbarCommands } from "./notebook/toolbar";
-import { HeadlessAdapter } from "./adapters/headlessAdapter";
 import { ToolRegistry } from "./tools.d/toolManager";
-import { HttpServer } from "./httpServer";
 import { debugLogger } from "./debugLogger";
 import { toolsLogger } from "./tools.d/toolsLogger";
 import { clearToolCache } from "./tools.d/cache";
+import { notifyApprovalNeeded } from "./notifications";
 
 // Agent Type System imports
 import { loadMutsumiConfig } from "./config/loader";
 import { ToolSetRegistry } from "./registry/toolSetRegistry";
 import { AgentTypeRegistry } from "./registry/agentTypeRegistry";
-import { resolveAgentDefaults, getEntryAgentTypes } from "./config/resolver";
+import { getEntryAgentTypes } from "./config/resolver";
 import { McpRegistry } from "./mcp/registry";
 
-/**
- * Checks if a file exists at the given URI.
- * @param {vscode.Uri} uri - URI to check
- * @returns {Promise<boolean>} True if the file exists
- * @example
- * const exists = await fileExists(uri);
- */
-async function fileExists(uri: vscode.Uri): Promise<boolean> {
-	try {
-		await vscode.workspace.fs.stat(uri);
-		return true;
-	} catch {
-		return false;
-	}
-}
+// Backend + frontend framework
+import { AgentBackend } from "./backend/agentBackend";
+import { AdapterRegistry } from "./frontend/registry";
+import { LiteAdapter } from "./frontends/lite/liteAdapter";
+import { WebViewAdapter } from "./frontends/webview/webviewAdapter";
+import { registerTestRagSearchCommand } from "./commands/testRagSearch";
+import { initializeRules } from "./contextManagement/prompts";
 
 /**
  * Initializes the Agent Type System by loading the Mutsumi configuration and
  * populating both the ToolSetRegistry and AgentTypeRegistry.
- *
- * Single source of truth for (re)initializing the Agent Type System, shared
- * between extension activation and the onDidChangeConfiguration handler so
- * that behavior stays consistent.
  */
 function initializeAgentTypeSystem(): ReturnType<typeof loadMutsumiConfig> {
-	// 1. Load Mutsumi configuration (merged with built-in defaults + validated)
 	const mutsumiConfig = loadMutsumiConfig();
 	debugLogger.log("[Extension] Mutsumi config loaded successfully");
 
-	// 2. Initialize ToolSetRegistry with configured tool sets
-	const toolSetRegistry = ToolSetRegistry.getInstance();
-	toolSetRegistry.initialize(mutsumiConfig.toolSets);
+	ToolSetRegistry.getInstance().initialize(mutsumiConfig.toolSets);
 	debugLogger.log("[Extension] ToolSetRegistry initialized");
 
-	// 3. Initialize AgentTypeRegistry with configured agent types
-	const agentTypeRegistry = AgentTypeRegistry.getInstance();
-	agentTypeRegistry.initialize(
+	AgentTypeRegistry.getInstance().initialize(
 		mutsumiConfig.agentTypes,
 		Object.keys(mutsumiConfig.toolSets),
 	);
@@ -84,24 +60,37 @@ function initializeAgentTypeSystem(): ReturnType<typeof loadMutsumiConfig> {
 
 /**
  * Activates the Mutsumi extension.
- * @description Registers all extension components including notebook serializer,
- * sidebar provider, controller, event listeners, commands, and completion providers.
- * @param {vscode.ExtensionContext} context - Extension context for registering disposables
- * @example
- * export function activate(context: vscode.ExtensionContext) {
- *   // Extension activation logic
- * }
  */
 export async function activate(
 	context: vscode.ExtensionContext,
 ): Promise<void> {
+	try {
+		await activateImpl(context);
+	} catch (err: any) {
+		debugLogger.fatal(`activate() failed: ${err?.stack || err}`);
+		throw err;
+	}
+}
+
+async function activateImpl(
+	context: vscode.ExtensionContext,
+): Promise<void> {
 	// Initialize Debug Logger first so other modules can use it
 	debugLogger.initialize(context);
+	debugLogger.log(`[Extension] activate() begin (log file: ${debugLogger.logFilePath})`);
+
+	// Surface fatal extension-host errors into the persistent log before death.
+	process.on("uncaughtException", (err) => {
+		debugLogger.fatal(`uncaughtException: ${err?.stack || err}`);
+	});
+	process.on("unhandledRejection", (reason: any) => {
+		debugLogger.fatal(`unhandledRejection: ${reason?.stack || reason}`);
+	});
 
 	// Initialize Tools Logger for streaming tool output
 	toolsLogger.initialize(context);
 
-	// Initialize ToolRegistry (required for the new ToolSet architecture)
+	// Initialize ToolRegistry (required for the ToolSet architecture)
 	ToolRegistry.initialize();
 
 	// Validate configuration before changing either runtime registry, then connect MCP
@@ -109,57 +98,73 @@ export async function activate(
 	const mcpRegistry = McpRegistry.getInstance();
 	const initialMutsumiConfig = initializeAgentTypeSystem();
 	await mcpRegistry.reload(initialMutsumiConfig.mcpServers);
+	debugLogger.log("[Extension] MCP registry reloaded");
 	context.subscriptions.push({ dispose: () => mcpRegistry.dispose() });
 
-	let sidebarProvider: AgentSidebarProvider | undefined;
-	context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e: vscode.ConfigurationChangeEvent) => {
-		const mcpChanged = e.affectsConfiguration("mutsumi.mcpServers");
-		if (!mcpChanged && !e.affectsConfiguration("mutsumi.agentConfig")) return;
-		try {
-			const config = loadMutsumiConfig();
-			// Validation completed for the whole candidate before either runtime registry changes.
-			ToolSetRegistry.getInstance().initialize(config.toolSets);
-			AgentTypeRegistry.getInstance().initialize(config.agentTypes, Object.keys(config.toolSets));
-			if (mcpChanged) {
-				await mcpRegistry.reload(config.mcpServers);
+	// ------------------------------------------------------------------
+	// Agent backend (sole state authority) + frontend adapters
+	// ------------------------------------------------------------------
+	const backend = new AgentBackend();
+	await backend.initialize();
+	debugLogger.log("[Extension] AgentBackend initialized");
+
+	const sidebarProvider = new AgentSidebarProvider(backend);
+	sidebarProvider.registerTreeView(context);
+	debugLogger.log("[Extension] Sidebar registered");
+	context.subscriptions.push({ dispose: () => sidebarProvider.dispose() });
+
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration(async (e: vscode.ConfigurationChangeEvent) => {
+			const mcpChanged = e.affectsConfiguration("mutsumi.mcpServers");
+			if (!mcpChanged && !e.affectsConfiguration("mutsumi.agentConfig")) {
+				return;
 			}
-			// Agent type/tool set changes affect the ContextTree labels and defaults even
-			// when MCP servers did not change.
-			sidebarProvider?.update();
-			debugLogger.log("[Extension] Mutsumi configuration reloaded");
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			debugLogger.log(`[Extension] Failed to reload Mutsumi configuration: ${message}`);
-			vscode.window.showErrorMessage(t("config.reloadFailed", message));
-		}
-	}));
+			try {
+				const config = loadMutsumiConfig();
+				// Validation completed for the whole candidate before either runtime registry changes.
+				ToolSetRegistry.getInstance().initialize(config.toolSets);
+				AgentTypeRegistry.getInstance().initialize(
+					config.agentTypes,
+					Object.keys(config.toolSets),
+				);
+				if (mcpChanged) {
+					await mcpRegistry.reload(config.mcpServers);
+				}
+				await sidebarProvider.update();
+				debugLogger.log("[Extension] Mutsumi configuration reloaded");
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				debugLogger.log(`[Extension] Failed to reload Mutsumi configuration: ${message}`);
+				vscode.window.showErrorMessage(t("config.reloadFailed", message));
+			}
+		}),
+	);
 
 	// Initialize SkillManager
 	const skillManager = SkillManager.getInstance();
 	await skillManager.initialize(context);
+	debugLogger.log("[Extension] SkillManager initialized");
 
 	// Initialize Codebase Service
 	CodebaseService.getInstance().initialize(context).catch(console.error);
 
 	// Initialize RAG Service
 	const ragService = await RagService.getInstance(context);
+	debugLogger.log("[Extension] RagService initialized");
 	context.subscriptions.push(ragService);
 
 	// 只在 RAG 启用时执行索引更新和注册文件监听器
 	if (ragService.isEmbeddingEnabled()) {
-		// 1. 启动时对所有工作区执行增量更新
 		for (const wf of vscode.workspace.workspaceFolders ?? []) {
 			ragService.updateWorkspace(wf.uri).catch((err) => {
 				debugLogger.log(`[RAG] Failed to update workspace on startup: ${err}`);
 			});
 		}
 
-		// 2. 文件保存时更新其所在代码库（防抖处理）
 		const pendingUpdates = new Map<string, NodeJS.Timeout>();
 		context.subscriptions.push(
 			vscode.workspace.onDidSaveTextDocument((doc) => {
 				const uri = doc.uri;
-				// 忽略缓存目录
 				if (uri.fsPath.includes(".mutsumi")) {
 					return;
 				}
@@ -169,12 +174,10 @@ export async function activate(
 				}
 
 				const wsKey = wsFolder.uri.toString();
-				// 清除之前的定时器
 				const existing = pendingUpdates.get(wsKey);
 				if (existing) {
 					clearTimeout(existing);
 				}
-				// 500ms 防抖后执行更新
 				const timer = setTimeout(() => {
 					pendingUpdates.delete(wsKey);
 					ragService.updateWorkspace(wsFolder.uri).catch((err) => {
@@ -186,319 +189,65 @@ export async function activate(
 		);
 	}
 
-	// 0. Initialize Agent Registry from disk
-	// This is the first step to ensure registry is populated before any UI logic runs
-	await AgentOrchestrator.getInstance().initialize();
-
-	// Initialize HeadlessAdapter and HttpServer
-	// The HTTP Server is gated by mutsumi.httpServer.* configuration (disabled by
-	// default). See docs/HTTP_SERVER_SECURITY_DESIGN_CN.md for the behavior contract.
-	const headlessAdapter = new HeadlessAdapter();
-	let httpServer: HttpServer | undefined;
-
-	const getHttpServerConfig = () => {
-		const config = vscode.workspace.getConfiguration("mutsumi");
-		return {
-			enabled: config.get<boolean>("httpServer.enabled", false),
-			password: config.get<string>("httpServer.password", ""),
-			host: config.get<string>("httpServer.host", "127.0.0.1"),
-			port: config.get<number>("httpServer.port", 3000),
-		};
-	};
-
-	const stopHttpServer = () => {
-		httpServer?.stop();
-		httpServer = undefined;
-	};
-
-	const warnHttpServerEmptyPassword = () => {
-		const OPEN_SETTINGS = t("httpServer.emptyPassword.openSettings");
-		const GENERATE_PASSWORD = t("httpServer.emptyPassword.generate");
-		vscode.window
-			.showWarningMessage(
-				t("httpServer.emptyPassword.warning"),
-				OPEN_SETTINGS,
-				GENERATE_PASSWORD,
-			)
-			.then(async (choice) => {
-				if (choice === OPEN_SETTINGS) {
-					await vscode.commands.executeCommand(
-						"workbench.action.openSettings",
-						"mutsumi.httpServer.password",
-					);
-				} else if (choice === GENERATE_PASSWORD) {
-					await vscode.commands.executeCommand(
-						"mutsumi.generateHttpServerPassword",
-					);
-				}
-			});
-	};
-
-	const startHttpServer = async () => {
-		if (httpServer) {
-			return;
-		}
-		const cfg = getHttpServerConfig();
-		if (!cfg.enabled) {
-			return;
-		}
-		if (!cfg.password) {
-			warnHttpServerEmptyPassword();
-			return;
-		}
-		const server = new HttpServer(headlessAdapter, context.extensionUri, {
-			host: cfg.host,
-			port: cfg.port,
-		});
-		try {
-			await server.start();
-			httpServer = server;
-		} catch (err) {
-			debugLogger.log(`[Extension] Failed to start HTTP server: ${err}`);
-		}
-	};
-
-	context.subscriptions.push({
-		dispose: () => {
-			stopHttpServer();
-			headlessAdapter.dispose();
-		},
+	// ------------------------------------------------------------------
+	// Frontend adapters
+	// ------------------------------------------------------------------
+	const adapterRegistry = new AdapterRegistry();
+	adapterRegistry.register(new LiteAdapter());
+	adapterRegistry.register(new WebViewAdapter());
+	await adapterRegistry.activateAll({
+		bus: backend.bus,
+		backend,
+		extensionContext: context,
 	});
+	context.subscriptions.push({ dispose: () => adapterRegistry.disposeAll() });
 
-	// Start on activation if enabled (and password is set)
-	void startHttpServer();
-
-	// React to mutsumi.httpServer.* configuration changes:
-	// - enabled toggle -> start / stop immediately
-	// - host / port change -> restart if running (or pending)
-	// - password change -> no restart needed; the auth middleware reads the
-	//   live configuration on every request
+	// ------------------------------------------------------------------
+	// Notification micro-frontend (the only vscode.window consumer of
+	// backend events)
+	// ------------------------------------------------------------------
 	context.subscriptions.push(
-		vscode.workspace.onDidChangeConfiguration(async (event) => {
-			if (!event.affectsConfiguration("mutsumi.httpServer")) {
-				return;
-			}
-			const cfg = getHttpServerConfig();
-			if (!cfg.enabled) {
-				stopHttpServer();
-				return;
-			}
-			if (
-				event.affectsConfiguration("mutsumi.httpServer.enabled") ||
-				event.affectsConfiguration("mutsumi.httpServer.host") ||
-				event.affectsConfiguration("mutsumi.httpServer.port")
-			) {
-				stopHttpServer();
-				await startHttpServer();
-			}
+		backend.bus.onBtF("session.error", (payload) => {
+			const copyDetailsBtn = t("controller.copyDetails");
+			vscode.window
+				.showErrorMessage(payload.message, copyDetailsBtn)
+				.then((selection) => {
+					if (selection === copyDetailsBtn) {
+						vscode.env.clipboard.writeText(payload.message);
+					}
+				});
 		}),
-	);
-
-	// Command: generate a cryptographically secure random password, write it to
-	// the user-level (Global) setting, copy it to the clipboard, and start the
-	// server if it was waiting for a password.
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			"mutsumi.generateHttpServerPassword",
-			async () => {
-				const password = crypto.randomBytes(32).toString("base64url");
-				await vscode.workspace
-					.getConfiguration("mutsumi")
-					.update(
-						"httpServer.password",
-						password,
-						vscode.ConfigurationTarget.Global,
-					);
-				await vscode.env.clipboard.writeText(password);
-				vscode.window.showInformationMessage(
-					t("httpServer.passwordGenerated"),
-				);
-				const cfg = getHttpServerConfig();
-				if (cfg.enabled && !httpServer) {
-					await startHttpServer();
-				}
-			},
-		),
-	);
-
-	// 1. Notebook Serializer
-	context.subscriptions.push(
-		vscode.workspace.registerNotebookSerializer(
-			"mutsumi-notebook",
-			new MutsumiSerializer(),
-			{ transientOutputs: true },
-		),
-	);
-
-	// 2. Sidebar
-	sidebarProvider = new AgentSidebarProvider(context.extensionUri, mcpRegistry);
-	sidebarProvider.registerTreeView(context);
-	AgentOrchestrator.getInstance().setSidebar(sidebarProvider);
-
-	// 3. Controller
-	const agentController = new AgentController();
-	const controller = vscode.notebooks.createNotebookController(
-		"mutsumi-agent",
-		"mutsumi-notebook",
-		t("notebookController.displayName"),
-	);
-	controller.supportedLanguages = ["markdown"];
-	controller.supportsExecutionOrder = true;
-	controller.executeHandler = (cells, notebook, ctrl) => {
-		agentController.execute(cells, notebook, ctrl);
-	};
-	context.subscriptions.push(controller);
-
-	AgentOrchestrator.getInstance().registerController(
-		agentController,
-		controller,
-	);
-
-	// 4. Event Listeners for Agent Lifecycle
-	// Track window state using Tab events to support background tabs.
-	// Use onDidChangeTabs to detect when tabs are opened or closed.
-	const handleTabsChanged = () => {
-		AgentOrchestrator.getInstance().notifyTabsChanged();
-	};
-
-	context.subscriptions.push(
-		vscode.window.tabGroups.onDidChangeTabs(handleTabsChanged),
-		vscode.window.tabGroups.onDidChangeTabGroups(handleTabsChanged),
-	);
-
-	// Initial check for open tabs to handle startup state
-	handleTabsChanged();
-
-	// Also track when documents are opened (for initial load / New Agent command)
-	context.subscriptions.push(
-		vscode.workspace.onDidOpenNotebookDocument(async (doc) => {
-			if (doc.notebookType === "mutsumi-notebook") {
-				const uuid = doc.metadata.uuid;
-				if (uuid) {
-					await AgentOrchestrator.getInstance().notifyNotebookDocumentOpened(
-						uuid,
-						doc.uri,
-						{
-							...doc.metadata,
-						},
-					);
-				}
-			}
-		}),
-	);
-
-	// Auto-rename on save based on metadata name
-	let isAutoRenaming = false;
-	context.subscriptions.push(
-		vscode.workspace.onDidSaveNotebookDocument((doc) => {
-			if (isAutoRenaming) {
-				return;
-			}
-			if (doc.notebookType !== "mutsumi-notebook") {
-				return;
-			}
-			if (doc.uri.scheme !== "file") {
-				return;
-			}
-
-			const name = doc.metadata?.name;
-			if (typeof name !== "string" || !name.trim()) {
-				return;
-			}
-
-			const sanitizedName = sanitizeFileName(name);
-			if (!sanitizedName) {
-				return;
-			}
-
-			const currentBaseName = path.basename(
-				doc.uri.fsPath,
-				path.extname(doc.uri.fsPath),
+		backend.bus.onBtF("approval.requested", (payload) => {
+			notifyApprovalNeeded(
+				t("approval.requestNotification", payload.request.actionDescription),
 			);
-
-			if (sanitizedName === currentBaseName) {
-				return;
-			}
-
-			// Defer the rename operation to avoid conflicts with the ongoing save
-			// VS Code will automatically update the editor to reflect the new file path
-			setTimeout(async () => {
-				try {
-					const dir = path.dirname(doc.uri.fsPath);
-					let suffix = 0;
-					let candidate = sanitizedName;
-					let targetUri = vscode.Uri.file(path.join(dir, `${candidate}.mtm`));
-
-					while (await fileExists(targetUri)) {
-						suffix += 1;
-						candidate = `${sanitizedName}-${suffix}`;
-						targetUri = vscode.Uri.file(path.join(dir, `${candidate}.mtm`));
-					}
-
-					isAutoRenaming = true;
-
-					const uuid = doc.metadata?.uuid;
-
-					// Perform the rename - VS Code will automatically update the editor
-					await vscode.workspace.fs.rename(doc.uri, targetUri, {
-						overwrite: false,
-					});
-
-					// Update the agent registry with the new file URI
-					if (uuid) {
-						AgentOrchestrator.getInstance().updateAgentFileUri(uuid, targetUri);
-					}
-				} catch (error) {
-					console.error("Failed to auto-rename notebook:", error);
-				} finally {
-					isAutoRenaming = false;
-				}
-			}, 0);
 		}),
 	);
 
-	// File deletion watcher
+	// ------------------------------------------------------------------
+	// .mtm file deletion watcher
+	// ------------------------------------------------------------------
 	const watcher = vscode.workspace.createFileSystemWatcher("**/*.mtm");
 	context.subscriptions.push(watcher);
 	context.subscriptions.push(
 		watcher.onDidDelete(async (uri) => {
-			await AgentOrchestrator.getInstance().notifyFileDeleted(uri);
+			await backend.notifyFileDeleted(uri);
 		}),
 	);
 
-	// Register completion provider for reference syntax
-	const completionProvider = vscode.languages.registerCompletionItemProvider(
-		"markdown",
-		new ReferenceCompletionProvider(),
-		"@",
-	);
-	context.subscriptions.push(completionProvider);
-
-	// Register image paste support
-	context.subscriptions.push(
-		vscode.languages.registerDocumentPasteEditProvider(
-			{ language: "markdown" },
-			new ImagePasteProvider(),
-			{
-				pasteMimeTypes: ["image/png", "image/jpeg"],
-				providedPasteEditKinds: [vscode.DocumentDropOrPasteEditKind.Text],
-			},
-		),
-	);
-
 	// Register commands
-	registerCommands(context);
+	registerCommands(context, backend);
 
 	activateEditSupport(context);
+	debugLogger.log("[Extension] activate() done");
 }
 
 /**
  * Registers all extension commands.
- * @private
- * @param {vscode.ExtensionContext} context - Extension context
  */
-function registerCommands(context: vscode.ExtensionContext): void {
-	// New Agent command
+function registerCommands(context: vscode.ExtensionContext, backend: AgentBackend): void {
+	// New Agent command: native QuickPick (no UI surface exists yet at creation
+	// time), then session.create + session.created correlation, then open.
 	context.subscriptions.push(
 		vscode.commands.registerCommand("mutsumi.newAgent", async () => {
 			const wsFolders = vscode.workspace.workspaceFolders;
@@ -507,17 +256,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
 				return;
 			}
 
-			// AgentType Step 1: Show QuickPick for Agent Type Selection
 			const entryTypes = getEntryAgentTypes();
-
 			if (entryTypes.length === 0) {
-				vscode.window.showErrorMessage(
-					t("newAgent.noEntryTypes"),
-				);
+				vscode.window.showErrorMessage(t("newAgent.noEntryTypes"));
 				return;
 			}
 
-			// Build QuickPick items with descriptions
 			const typeItems = entryTypes.map(({ name, config }) => {
 				const modelDisplay = config.defaultModel
 					? `${config.defaultModel.model} (${config.defaultModel.provider})`
@@ -535,78 +279,35 @@ function registerCommands(context: vscode.ExtensionContext): void {
 				};
 			});
 
-			// Show QuickPick for agent type selection
 			const selectedType = await vscode.window.showQuickPick(typeItems, {
 				placeHolder: t("newAgent.quickPickPlaceHolder"),
 				title: t("newAgent.quickPickTitle"),
 			});
-
 			if (!selectedType) {
-				// User cancelled
 				return;
 			}
 
-			const selectedAgentType = selectedType.typeName;
-
-			// AgentType Step 2: Create Agent with Selected Type Defaults
-			const root = wsFolders[0].uri;
-			const agentDir = vscode.Uri.joinPath(root, ".mutsumi");
 			try {
-				await vscode.workspace.fs.createDirectory(agentDir);
-			} catch {
-				// Directory may already exist
+				await initializeRules(context.extensionUri, wsFolders[0].uri);
+
+				// In-process caller: await the backend method directly.
+				const session = await backend.createSession({
+					requestId: uuidv4(),
+					agentType: selectedType.typeName,
+				});
+
+				if (session.fileUri) {
+					await vscode.commands.executeCommand(
+						"vscode.openWith",
+						session.fileUri,
+						"mutsumi.chat",
+						{ preview: false },
+					);
+				}
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				vscode.window.showErrorMessage(message);
 			}
-
-			await initializeRules(context.extensionUri, root);
-
-			// Get all existing rules from the workspace (recursively)
-			let allRules: string[] = [];
-			try {
-				const rulesDir = vscode.Uri.joinPath(root, ".mutsumi", "rules");
-				const ruleFiles = await collectRulesRecursively(rulesDir, rulesDir);
-				allRules = ruleFiles.map(({ name }) => name);
-			} catch {
-				// Ignore if rules dir doesn't exist yet
-			}
-
-			// Resolve agent defaults using centralized resolver
-			const defaults = resolveAgentDefaults(selectedAgentType, {
-				availableRules: allRules,
-			});
-
-			const name = `agent-${Date.now()}.mtm`;
-			const newFileUri = vscode.Uri.joinPath(agentDir, name);
-
-			// Collect all workspace root URIs in standard format (e.g., file:///c:/...)
-			const allWorkspaceUris = vscode.workspace.workspaceFolders?.map((f) =>
-				f.uri.toString(),
-			) || [root.toString()];
-
-			// Create default content with agent type and its defaults
-			const initialContent = MutsumiSerializer.createDefaultContent(
-				allWorkspaceUris,
-				selectedAgentType,
-				defaults.rules,
-				undefined, // Let it generate a new UUID
-				defaults.skills,
-				McpRegistry.getInstance().resolveDefaultSelection(defaults.mcpServers),
-			);
-
-			await vscode.workspace.fs.writeFile(newFileUri, initialContent);
-			await vscode.window.showNotebookDocument(
-				await vscode.workspace.openNotebookDocument(newFileUri),
-				{ preview: false },
-			);
-
-			// Show confirmation message with agent type info
-			vscode.window.showInformationMessage(
-				t(
-					"newAgent.created",
-					selectedAgentType,
-					defaults.rules.length,
-					defaults.skills.length,
-				),
-			);
 		}),
 	);
 
@@ -649,21 +350,17 @@ function registerCommands(context: vscode.ExtensionContext): void {
 				const workspaceFolders = vscode.workspace.workspaceFolders;
 				const isMultiRoot = workspaceFolders && workspaceFolders.length > 1;
 
-				// Calculate relative path from the workspace folder
 				const relativePath = path
 					.relative(workspaceFolder.uri.fsPath, targetUri.fsPath)
 					.replace(/\\/g, "/");
 
 				let refPath: string;
 				if (isMultiRoot) {
-					// In multi-root workspace, prefix with workspace folder name
 					refPath = `${workspaceFolder.name}/${relativePath}`;
 				} else {
-					// In single-root workspace, use relative path only
 					refPath = relativePath;
 				}
 
-				// Check if target is a directory, if so append trailing slash
 				try {
 					const stat = await vscode.workspace.fs.stat(targetUri);
 					if (stat.type === vscode.FileType.Directory) {
@@ -703,12 +400,11 @@ function registerCommands(context: vscode.ExtensionContext): void {
 		}),
 	);
 
-	// Register toolbar commands
-	registerToolbarCommands(context);
+	// RAG search test command
+	registerTestRagSearchCommand(context);
 }
 
 /**
  * Deactivates the extension.
- * @description Cleanup function called when the extension is deactivated.
  */
 export function deactivate(): void {}

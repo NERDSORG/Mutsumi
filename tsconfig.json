@@ -17,6 +17,6 @@
     "exclude": [
         "node_modules",
         ".vscode-test",
-        "src/notebook/renderer.ts"
+        "src/frontends/webview/ui"
     ]
 }

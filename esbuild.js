@@ -1,5 +1,6 @@
 const esbuild = require("esbuild");
 const path = require("path");
+const fs = require("fs");
 
 /**
  * @moonshot-ai/kosong sources import package-internal modules via the
@@ -56,19 +57,18 @@ async function main() {
 		],
 	});
 
-	// === Renderer build (Browser, ESM) ===
-	// VS Code loads notebook renderers via import() in the webview,
-	// so the entrypoint must be an ES module. CJS output would crash
-	// at load time with "module is not defined".
-	const rendererCtx = await esbuild.context({
-		entryPoints: ["src/notebook/renderer.ts"],
+	// === WebView bundle (Browser, ESM) ===
+	// The chat webview loads the bundle as an ES module inside the custom
+	// editor's webview.
+	const webviewCtx = await esbuild.context({
+		entryPoints: ["src/frontends/webview/ui/main.ts"],
 		bundle: true,
 		format: "esm",
 		minify: production,
 		sourcemap: !production,
 		sourcesContent: false,
 		platform: "browser",
-		outfile: "dist/notebookRenderer.js",
+		outfile: "dist/webview.js",
 		external: [],
 		logLevel: "warning",
 		plugins: [
@@ -78,12 +78,20 @@ async function main() {
 
 	if (watch) {
 		await extCtx.watch();
-		await rendererCtx.watch();
+		await webviewCtx.watch();
 	} else {
 		await extCtx.rebuild();
-		await rendererCtx.rebuild();
+		await webviewCtx.rebuild();
 		await extCtx.dispose();
-		await rendererCtx.dispose();
+		await webviewCtx.dispose();
+	}
+
+	// Ship the codicon font + stylesheet with the webview bundle assets.
+	for (const asset of ["codicon.css", "codicon.ttf"]) {
+		fs.copyFileSync(
+			path.join(__dirname, "node_modules", "@vscode", "codicons", "dist", asset),
+			path.join(__dirname, "dist", asset),
+		);
 	}
 }
 

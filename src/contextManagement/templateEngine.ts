@@ -11,8 +11,8 @@ import { ContextItem } from '../types';
 
 /**
  * Template Engine Class
- * @description A unified template engine that replaces the old ContextAssembler,
- * handling both file references @[path] and tool calls @[tool{args}] in a single pass
+ * @description A unified template engine handling both file references
+ * @[path] and tool calls @[tool{args}] in a single pass
  */
 export class TemplateEngine {
     /**

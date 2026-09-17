@@ -1,7 +1,7 @@
 # Mutsumi 项目开发指南（Agent 贡献者版）
 
 > 本文件面向参与 Mutsumi 开发的 AI 编码 Agent，介绍各模块职责、模块间的接线方式，以及非平凡/反直觉的设计约束。
-> Mutsumi（若叶睦）是一款 VS Code 多 Agent 笔记本环境插件：Agent 会话以 `.mtm`（JSON）文件持久化，经 VS Code Notebook API 呈现，工具/上下文/编排围绕该模型展开。
+> Mutsumi（若叶睦）是一款 VS Code 多 Agent 对话环境插件：Agent 会话以 `.mtm`（JSON）文件持久化，经 Custom Editor + WebView 呈现。全部会话状态的唯一权威是 `src/backend/` 的 AgentBackend；前端（WebView / Lite / 将来的 ACP）只经 FtB/BtF 事件与后端通信。
 
 ---
 
@@ -9,299 +9,186 @@
 
 ```
 src/
-├── adapters/          # 适配器层：把 AgentRunner 与 UI/传输解耦（Notebook / HTTP / Lite）
-├── agent/             # Agent 核心逻辑（执行循环、LLM 客户端、编排、标题生成）
-├── codebase/          # 代码库服务（RAG 向量搜索）
-├── config/            # 配置系统（AgentType、toolSets、MCP Server 的合并/校验/解析）
-├── contextManagement/ # 动态上下文管理（模板引擎、历史装配、幽灵块、Skills）
-├── httpServer/        # HTTP API 服务（复用同一套 Agent 执行链路）
-├── mcp/               # MCP 宿主（连接 registry、ITool 适配、结果投影）
-├── notebook/          # Notebook UI 实现（serializer、自定义渲染器、工具栏命令）
-├── sidebar/           # 侧边栏视图（Agent / 审批 / Context / Shell 任务）
-├── registry/          # 配置运行时注册表（ToolSetRegistry、AgentTypeRegistry）
-├── tools.d/           # 内置工具实现与工具运行时（ToolRegistry、ToolSet、权限）
-└── types.ts / utils.ts / i18n.ts / controller.ts / extension.ts
+├── backend/           # 后端（唯一状态权威，零 UI 依赖）
+│   ├── agentBackend.ts    # 单例门面：注册全部 FtB 处理器、物化会话缓存
+│   ├── backendSession.ts  # 唯一 Session 实现（metadata+history+队列+RenderData+abort）
+│   ├── sessionStore.ts    # .mtm 直读写（每文件写队列），唯一文件写口
+│   ├── agentRegistry.ts   # 会话注册表 + 创建/重命名/删除/冲突消毒
+│   ├── approvalManager.ts # 审批权威（ApprovalRequestManager，事件化）
+│   ├── dispatchManager.ts # 子 Agent 派发协调（DispatchSessionManager）
+│   ├── titleGenerator.ts  # 首轮完成后生成标题（ephemeral 会话）
+│   ├── snapshot.ts        # 历史 → session.state 快照（水合）
+│   ├── events.ts          # FtB/BtF 事件协议（payload 映射 + 名字注册表，satisfies 校验穷尽）
+│   ├── interfaces.ts      # 模块纯契约：registry/session/approval/dispatch 接口
+│   └── eventBus.ts        # 进程内类型化总线，方向分离
+├── agent/             # 每次 run 的执行件：agentRunner / generateStream / renderDataBuilder / toolExecutor
+├── frontend/          # 适配器框架（IFrontendAdapter + AdapterRegistry，DI 容器）
+├── frontends/
+│   ├── webview/       # WebView 宿主：webviewAdapter（单例）+ panelController（每面板）+ ui/（浏览器 bundle）
+│   └── lite/          # Lite 适配器：runOnce 一次性程序化运行，自动应答自己审批
+├── contextManagement/ # 上下文装配：history.ts、ghostBlocks、templateEngine、prompts、skillManager
+├── tools.d/           # 工具系统：toolManager、interface、edit_file（编辑事务）、tools/、preExecution
+├── config/ + registry/ # Agent 分角色系统（配置加载/校验/解析）
+├── mcp/               # MCP 宿主
+├── codebase/          # 代码库服务与 RAG
+├── sidebar/           # 三个 TreeView：agent / approval / shellTask
+└── types.ts / utils.ts / i18n.ts / extension.ts
 ```
 
 ### 核心分层原则
 
-1. **适配器解耦**：`AgentRunner` 只依赖 `IAgentSession` 接口，不感知 Notebook 还是 HTTP。Notebook/HTTP 各自通过 adapter 复用同一执行链路。
-2. **URI 优先**：所有文件操作使用 `vscode.Uri`，支持多根工作区与其他扩展的 FileSystemProvider 特殊 schema。Mutsumi 自身数据（`.mutsumi/`）固定在工作区列表 `[0]`。
-3. **工具分层**：内置工具（静态注册）与 MCP 工具（动态发现）是两套体系，在 ToolSet 构建时组合；`task_finish` 独立于一切工具集配置。
-4. **装配点唯一**：`extension.ts` 是唯一激活/装配入口（初始化顺序、配置监听、事件订阅都在这里）。
-5. **禁止反向依赖**：`mcp` 不 import `sidebar`/`notebook`；`serializer`/`fileOps` 不发起 MCP 连接；`ToolExecutor` 对 MCP 零特判；sidebar 只读依赖 mcp registry 状态。
+1. **后端零 UI 依赖**：`src/backend/` 与 `src/agent/` 不 import 任何 `vscode.window` / Notebook API / Webview 类型。允许的 VSCode API 仅 `workspace.fs`、`EventEmitter`、`Uri`、配置读写等纯数据面。唯一例外的 vscode.window 使用点在装配层（extension.ts 的通知微前端）。
+2. **一切跨层通信都是事件**：前端→后端只有 FtB（意图），后端→前端只有 BtF（事实）。前端永不监听 FtB；任何改变后端状态的 FtB，后端必须广播对应 BtF 事实。
+3. **每个事件携带 `sessionId`**（真正的全局事件除外：`sessions.changed`、`settings.autoApprove`）。
+4. **URI 优先**：文件操作使用 `vscode.Uri`；Mutsumi 自身数据（`.mutsumi/`）固定在工作区列表 `[0]`。
+5. **装配点唯一**：`extension.ts` 是唯一激活/装配入口。
 
 ---
 
-## 2. Notebook 系统与 UI 层
+## 2. 后端（`src/backend/`）
 
-### 2.1 `.mtm` 文件模型与 Serializer（`notebook/serializer.ts`）
+### 2.1 事件协议（events.ts + eventBus.ts）
 
-`.mtm` 是 JSON：`{ metadata: AgentMetadata, context: AgentMessage[] }`。VS Code 通过 `NotebookSerializer` 把它与 Notebook 文档互相转换。
+- 事件协议自含在 `events.ts`：payload 映射（`FtBEventMap` / `BtFEventMap`）+ 名字注册表（`FTB_EVENT_NAMES` / `BTF_EVENT_NAMES` 两个 `as const` 数组）互相 `satisfies` 校验；新增事件 = 加映射条目 + 加数组条目，漏一个编译报错。
+- `bus.registerBackendHandlers(handlers)` 由 AgentBackend 调用一次，mapped type 强制穷尽所有 FtB 处理器。
+- 适配器用 `bus.subscribeAllBtF((name, payload) => ...)` 一行订阅全部 BtF，按 payload.sessionId 过滤路由。
+- 请求-回执关联：调用方生成 `requestId`，后端在完成事件中原样回带（`session.create` → `session.created.requestId`）。进程内调用者可直接 await 后端方法。
 
-核心算法是 **messages ↔ generic cells 双向映射**（`messagesToGenericCells` / `genericCellsToMessages`），并被 HeadlessAdapter 复用，因此协议是"与 UI 无关"的：
+### 2.2 BackendSession —— 唯一 Session 实现
 
-- User 消息 → Code cell（kind 2）
-- Assistant 消息 → Markup cell（kind 1）
-- **紧随 user 的 assistant/tool 消息组不单独建 cell**，而是存入该 user cell 的 `mutsumi_interaction` metadata，渲染为该 cell 的输出区（这是最反直觉的点）
-- System 消息 → 带 `**System**: ` 前缀的 Markup cell，反序列化时剥前缀
-- 孤儿 assistant/tool 消息（无前置 user）→ 直接拍平成 markdown 存 cell value，**不写** `mutsumi_interaction`
-- `mutsumi_interaction` **只存在于 user cell**，永不写在 assistant cell 上
-- cell value 中保存的幽灵块 markdown 在反序列化时剥离（`stripGhostBlockFromCell`），结构化版本在 metadata 中
+状态即全部真相：`sessionId`、`fileUri`（null = ephemeral）、`metadata`、`history`（扁平消息数组）、`currentTurnRenderData`、`renderDataBuilder`、`queue`、`status`、`currentAbort`。
 
-序列化时 `sub_agents_list` 与 `AgentOrchestrator` 内存注册表**双向同步**（打开时注入 childIds，保存时回写）。
+关键契约：
 
-### 2.2 自定义渲染器（`notebook/renderer.ts` + `renderTypes.ts`）
+- **`appendMessage` 是历史的唯一写口**：每条消息产生即追加并触发写队列落盘。
+- **运行语义**（排队/插话/轮次边界注入）：
+  - drain 循环每会话一条 Promise 链，互斥；idle 后 steer/queue 等价。
+  - **steer（插话）**：runner 在每轮工具批次结束、下一次 LLM 调用前调 `session.drainSteering()`，把 steer 消息插在 tool result 之后注入；不打断当前输出。
+  - **queue（排队）**：仅在自然停止后由 drain 循环取出；以工具调用告终的轮次不算自然停止。
+  - `run.interrupt` 与 `history.truncate` 都会清空队列；打断/截断后 `repairDanglingToolCalls()` 合成 `[Interrupted]` 占位 tool 消息修尾。
+- `fileUri = null` 的 **ephemeral 会话**（标题生成 / Lite runOnce / 预执行平面）照常发事件（零成本）、不落盘、不进注册表。
+- 工具经 `context.session` 调审批/派发：`requestApproval`（简单工具，返回 `null | 拒绝串`）、`requestApprovalWithAction`（edit 事务，带 customAction/onApprove）、`requestDispatch`、`reportTaskFinished`。空理由拒绝 → `terminationHook` 终止会话（ToolExecutor 每批次注册该 hook）。
 
-Agent 输出不是 HTML 字符串，而是**结构化中间表示 `RenderData`**（`MUTSUMI_AGENT_CHAT_MIME`）：
+### 2.3 sessionStore —— .mtm 直读写（唯一文件写口）
 
-```text
-RenderData = { committed: RenderBlock[], active: {...} | null }
-RenderBlock = content | reasoning(collapsed) | toolCall(isStreaming, result?)
-```
+- 读：过滤掉文件中的 system 消息（system prompt 是 metadata + 工作区状态的纯函数，从不入盘；过滤只为兼容更早版本写入的文件）。
+- 写：直写目标文件（truncate + write）；每文件一个 Promise 写队列串行化。不用 tmp + rename：rename-over 在 watch 视角是 DELETE + CREATE，会导致 VS Code 关闭 custom editor 并误触本扩展自己的 `.mtm` 删除 watcher。
+- 文件开没开着都一样直写。后端是文件唯一写方；运行中文件被外部改动不重新加载（内存为真相）。
 
-渲染器对 `committed` 做 DOM 缓存（渲染一次、永不再渲染），只重渲 `active` 流式区。**协议方（adapter）只负责产出 RenderData JSON**，HTML 生成全部在渲染器侧。
+### 2.4 AgentRegistry
 
-### 2.3 UIRenderer 三级锁定（`agent/uiRenderer.ts`）
+- **Agent 创建唯一入口** `createAgent(...)`：`resolveAgentDefaults` 解析默认 → 写文件 → 注册 → 广播 `session.created` → 返回物化 BackendSession。prompt 不写入 context，保存在注册表项上由调用方入队（保证恰好装配一次）。
+- 重命名（sanitize + 去重 + `fs.rename`）也在这里，由 `session.rename` 与标题生成共用。
+- 启动 `scanAllAgents` 扫描 `.mutsumi/`；UUID 冲突（如复制文件）用 `sanitizeAgentFile` 消毒。
+- `openClientCount` 由 `session.open`/`session.close` 维护；侧栏 agent 树展示"至少一个 agent 被前端展示（openClientCount > 0）或正在后端运行（isRunning）"的整棵树。
 
-`AgentRunner` 侧的流式状态机，保证"已提交块不重渲"：
+### 2.5 审批 / 派发 / 标题 / 快照
 
-- **L1（轮次）**：`commitRoundUI()` 把整轮剩余内容锁入 committed
-- **L2（轮内）**：content 出现 → reasoning 锁定；tools 出现 → content 锁定
-- **L3（工具）**：`appendBlock()` 提交单个完成的工具调用
-
-### 2.4 工具栏与命令（`notebook/toolbar.ts` + `commands/`）
-
-工具栏命令（selectModel、renameSession、debugContext、toggleAutoApprove、testRagSearch、compressConversation、pruneGhostBlocks）经 `registerToolbarCommands` 统一注册；每个命令一个文件，依赖 `buildInteractionHistory` 或 metadata 读写。
-
-命令式交互遵循的通用模式：
-
-- 读 metadata → 不可变展开 → `WorkspaceEdit` 写回
-- 涉及上下文缩短的操作（pruneGhostBlocks、removeFile、MCP 开关）默认使前缀缓存失效（见 §5.2）
-
-### 2.5 侧边栏（`sidebar/`）——四个 TreeView 的设计模式
-
-| View | Provider | 数据源 | 结构 |
-|------|----------|--------|------|
-| Agents | `agentTreeProvider` | `AgentOrchestrator`（内存注册表 + childIds） | 树：parent → children，双向引用 |
-| Approvals | `approvalTreeProvider` | `approvalManager`（permission.ts） | 平铺，pending 优先、新的在前 |
-| Context | `contextTreeProvider` | Notebook metadata + 文件系统 + SkillManager + McpRegistry | 分类树 |
-| ShellTasks | `shellTaskTreeProvider` | shell 任务注册表 | 平铺 + 状态 |
-
-统一的 TreeView 模式：
-
-- provider 持有 `_onDidChangeTreeData` EventEmitter，`refresh()` 即 `fire(null)`
-- **子节点缓存在 item.children 上**：`getChildren(element)` 大部分只是返回 `element.children`（只有根节点才构建）；ContextTree 的 `getChildren` 必须按 `element.data.type` 分发（category/directory/mcpServer 返回 children，其余为空）
-- 数据变化来源多样（运行状态、审批、metadata、registry、配置），刷新触发点分散在 `AgentSidebarProvider.registerTreeView` 的订阅里
-- `AgentSidebarProvider.update()` 是聚合刷新入口（agent + context + shell 三棵树）
-
-**ContextTree 分类**（`contextTreeItem.ts`）：AGENT TYPE 节点 + RULES / SKILLS / MACROS / FILES / MCPS 分类。`ContextItemType`/`CategoryType` 是判别联合，新增分类必须同步：类型定义、`getIconPath`、`getContextValue`（决定菜单 `when`）、`buildTooltip`、package.json `view/item/context` 菜单、i18n。
-
-菜单机制：树项的 `contextValue` 与 package.json `menus["view/item/context"]` 的 `when: viewItem == xxx` 匹配决定显示哪些内联命令；"只读态"用独立 contextValue（如 `mcpServerReadOnly`）隐藏操作。
+- **ApprovalRequestManager**：自动放行（全局开关 + 预执行平面）→ 留痕；否则广播 `approval.requested` 挂起，首个 `approval.respond` 定案并广播 `approval.resolved`（其余前端立即撤卡）。拒绝理由随 respond 载荷携带。`onDidChangeRequests` 供侧栏审批树订阅。
+- **DispatchSessionManager**：子 Agent 文件立即落盘 → 广播 `dispatch.requested` → approve 则后端直接后台开跑，reject 则删除子会话文件；子 `task_finish` → 聚合报告 → resolve 父的挂起 Promise。
+- **TitleGenerator**：首轮用户消息完成后 ephemeral 单轮 runner 生成标题，走 `session.rename` 同一路径。
+- **snapshot.ts**：历史 → `session.state` 快照（turns + currentTurn + pendingApprovals + contextPanel + availableModels）。`buildInteractionRenderBlocks` 把 assistant/tool 消息组渲染成 RenderBlock[]——它依赖 ToolManager/MCP 注册表，必须在宿主做。水合用快照，不做逐事件回放。
 
 ---
 
 ## 3. Agent 执行核心（`agent/`）
 
-### 3.1 执行入口：controller → runner（`controller.ts` → `agentRunner.ts`）
-
-Notebook 执行链路（`AgentController.execute`）：
-
-```text
-用户运行 cell
-  → notifyAgentStarted(uuid)
-  → processCell：解析模型（metadata 完整对 → 用；缺 model → 全局默认；有 model 无 provider → 迁移错误）
-  → 取凭据（getModelCredentials）
-  → NotebookAdapter.createSession
-  → createToolSetForAgent(metadata 快照)   ← 内置 + MCP + task_finish 在此组合
-  → buildInteractionHistory(session)       ← 装配上下文（见 §5）
-  → new AgentRunner(...).run(abortController, history)
-  → session.setHistory + save
-  → notifyAgentStopped(uuid)
-```
-
-HTTP 执行（`httpServer/chat.ts`）走 HeadlessAdapter + 同一 `createToolSetForAgent` / `AgentRunner`，因此 Notebook 与 HTTP 的 Agent 能力必须一致。
-
-### 3.2 AgentRunner 主循环
-
-每轮（最多 `maxLoops`）：
-
-1. `llmStreamHandler.streamResponse(messages, toolSet.getDefinitions(), ...)`——流式回调里用 UIRenderer 更新活动区
-2. 无 tool call → 结束；有 → 提交 assistant 消息
-3. `toolExecutor.executeTools(toolCalls, ...)`：
-   - 解析参数 JSON → 建 `ToolSession`（AbortController）
-   - 构建 `ToolContext`（allowedUris、session、abortSignal、appendOutput、signalTermination）
-   - 缓存查询（仅 `shouldCache` 工具）→ `toolSet.execute` → `raceAbort` 包裹
-   - 渲染工具调用块、收集 tool 消息
-4. `task_finish` → `markSessionAsFinished`（写 `is_task_finished`）；拒绝类终止 → break
-5. 首次 user 消息后生成标题（**跳过 `LiteAgentSession`**，避免递归）
-
-### 3.3 ToolExecutor 的契约
-
-- 工具错误一律以**字符串结果**返回给模型（`Error: ...`），不抛断循环；只有 abort/取消才走异常路径
-- 取消语义：外层 `raceAbort` 在 signal 触发时 reject；工具若响应 `toolSession.abortSignal` 可立即停止；被强制打断 → `[Interrupted] ...` 并 `shouldTerminate`
-- `signalTermination(isTaskComplete)` 是工具主动终止会话的唯一通道
-
-### 3.4 子母 Agent 编排（`agentOrchestrator.ts` + `dispatch.ts`）
-
-生命周期：
-
-```text
-父 Agent 调用 dispatch_subagents（tools.d/tools/agent_control.ts）
-  → AgentOrchestrator.requestDispatch(parentId, ...)
-  → DispatchSessionManager.createSession(parentId, childUuids, resolve, reject)   ← 挂起父执行
-  → 为每个子 Agent 调 createAndOpenAgent（子 Agent 文件写入 .mutsumi/）
-  → 子 Agent 独立运行（可在边栏/新窗口），完成后调用 task_finish
-  → reportTaskFinished(childUuid, summary)
-  → addResult + isSessionComplete 判定（result 或 deleted 全部到齐）
-  → generateReport 聚合 → resolve 父的挂起 promise
-```
-
-关键点：
-
-- `DispatchSessionManager` 是"父等子"的协调器：children 可能被用户删除（`addDeletedChild`）也算完成
-- 子 Agent **用自己的 agentType 默认值**（rules/skills/MCP 快照），不继承父 Agent 的手动选择
-- `context_broadcast` 拼进每个子 Agent 的 prompt 前缀（`## Context Summary`）
-- abort 信号 → `cancelSession` → reject 父的挂起 promise
-- `AgentRegistry`（agent/registry.ts）是内存真相，启动时 `scanAllAgents` 从磁盘加载，UUID 冲突（如复制文件）用 `setAgentWithConflictCheck` 清洗
+- **AgentRunner**：构造参 `session: BackendSession`；`run(abortController, { systemPrompt, wireHistory })`（system prompt 显式传入；线协议历史中不含 system 消息）。输出走 `session.publishRenderData(renderData)`（对象直传）。错误广播 `session.error`（通知微前端弹原生通知）。标题生成由 drain 循环在首轮完成后触发，runner 不参与。轮次边界有 steer 注入钩子。
+- **RenderDataBuilder**：流式状态 → RenderData IR，三级锁（轮次/轮内/工具块）+ 重试回滚快照；`commitTurnBoundary()` 在 steer 注入时封存当前轮、开新一轮。依赖 ToolManager 的 prettyPrint/renderingConfig——这是它留在宿主的原因。
+- **ToolExecutor**：`ToolContext.session: BackendSession`；工具错误以字符串结果返回不断循环；abort → `[Interrupted]` + `shouldTerminate`。每批次执行前注册 `session.terminationHook`（审批空理由拒绝 → 终止会话）。
+- **generateStream.ts**：kosong `generate()` 的流式泵。
 
 ---
 
-## 4. 适配器层（`adapters/`）
+## 4. 前端（`src/frontend/` + `src/frontends/`）
 
-契约见 `interfaces.ts`：`IAgentAdapter`（createSession/getSession/持久化辅助）+ `IAgentSession`（getInput/getHistory/appendOutput/replaceOutput/save/getConfig/setConfig/updateTitle/幽灵块钩子）。
+### 4.1 适配器框架
 
-三个实现：
+- 注册进框架的是单例 host；host 内部按面板 spawn 轻量 controller（不进注册表）。
+- `IFrontendAdapter`：`id`、`capabilities.interactive`、`activate(ctx)`、`dispose()`；`AdapterContext = { bus, backend, extensionContext }`。
+- 总线永远是单一全局通道，路由靠 payload.sessionId，不搞 per-session channel。
 
-| Adapter | 用途 | 特性 |
-|---------|------|------|
-| `NotebookAdapter` | Notebook 会话 | 单元格历史 1:1 映射、`execution.replaceOutput`、metadata 经 WorkspaceEdit 保存 |
-| `HeadlessAdapter` | HTTP 会话 | 从 .mtm 内容反序列化、SSE/JSON 输出 RenderData |
-| `LiteAdapter` | 后台任务（标题、压缩） | 无 UI、无幽灵块投影；`AgentRunner` 用 `instanceof` 跳过递归标题生成 |
+### 4.2 WebView 前端（`src/frontends/webview/`）
 
-反直觉点：
+- 载体是 Custom Editor（`customEditors` 贡献点 viewType `mutsumi.chat`，selector `*.mtm`），`CustomReadonlyEditorProvider`——不提供文档模型，没有脏缓冲区状态。一个会话可挂多个面板（split）；关窗不杀会话，重开靠 `session.state` 水合。
+- **panelController.ts**（每面板一个）是进程间通信唯一关口：
+  - WebView→宿主：`vscode.postMessage({kind:'ftb',...})` → controller 注入 `sessionId` + `origin:'webview'` 后 `bus.emitFtB`（脚本不自报）。
+  - 宿主→WebView：`subscribeAllBtF` + sessionId 过滤 → `postMessage({kind:'btf',...})`。
+  - 适配器本地 RPC（图片上传/解析）用 `{kind:'rpc'}` 信封，只在 panel ↔ controller 之间，不进总线。
+  - `ready` → `session.open`（回快照水合）；dispose → `session.close`；激活 → `session.focus`。
+- **渲染核心**（`ui/render/`）：micromark GFM、lowlight 高亮、committed DOM 缓存 + active 增量协调（指纹前缀对齐）、`<pre>` 打捞、details 开合继承、复制代码按钮。每 turn 一个 `TurnRenderer`。
+- **布局**（Kimi 网页式）：用户消息 = 右对齐气泡（静态 Markdown）；Agent 消息 = 全宽（逐 token 实时渲染）；无 Cell 概念、消息不可编辑。不乐观渲染：发送进排队条，`session.userMessageCommitted` 才转正为气泡。
+- **两个可扩展注册表**：`ui/menus.ts`（消息菜单：复制/重试/撤回/继续）、`ui/toolbar.ts`（工具栏：插图/重命名/裁剪引用/调试上下文/自动批准/上下文面板/模型与思考强度面板，全部 codicon 图标）。加项 = 加一条注册；`popupId` 项由同名锚定弹层接管点击。
+- **弹出层基类**：`ui/popup.ts` 的 `AnchoredPopup`（锚定按钮上方定位、toggle/Esc/外部点击关闭）+ `renderPickerGroups`（可折叠分组 + codicon 勾选行）共享渲染；`ContextPanel` 与 `SettingsPanel` 均继承基类。
+- **上下文面板**：contextItems/rules/skills/MCP 工具的查看与开关。UI 形态是锚定在工具栏"上下文"按钮正上方的弹出面板（点击外部/Esc/再次点击按钮关闭），内容为多级可折叠树（目录树 + MCP server→tool 层级），状态图标用 codicon（check/dash/circle-outline），字体资源由 esbuild 从 `@vscode/codicons` 拷入 dist/ 并经 HTML `<link>` 引入。数据来自快照 + `session.metadata` 增量，操作发 FtB `context.*`。
+- **图片链路**：粘贴/拖入/工具栏插图 → RPC 上传 → 宿主写 `os.tmpdir()/mutsumi_images` → 插入 `![image](file://…)`；历史图片懒解析（`file://` img → RPC 换 webview URI）。
 
-- `buildInteractionHistory` 在 adapter 之外完成（controller 调用），adapter 的 `getHistory` **不做展开**（注释明确：Do NOT expand here）
-- metadata 保存走"打开文档 WorkspaceEdit / 关闭文档直写"双路径（见 `agent/fileOps.ts` 的 update 系列函数）
+### 4.3 Lite 适配器（`src/frontends/lite/`）
+
+无 UI、无工具（`createEmptyToolSet()`）、不可交互。`runOnce(prompt, {model, provider})`：ephemeral 会话 + 入队一条消息 + 订阅自己的 `session.output`/`session.status` 收敛文本；自动应答自己会话的审批。用途：程序化"发一条取结果"与后端冒烟测试。
+
+### 4.4 侧栏（`src/sidebar/`）与通知微前端
+
+- 三棵树：agent 树（backend AgentRegistry + `sessions.changed`；打开 = `vscode.openWith(uri, 'mutsumi.chat')`）、审批树（ApprovalRequestManager + DispatchSessionManager；按钮发 FtB respond，origin 'sidebar'；拒绝理由由侧栏输入框收集随载荷携带）、shell 任务树。审批树是常驻兜底前端：未打开面板的会话的审批都落在这里。
+- 通知微前端（extension.ts）：`session.error` → showErrorMessage（带复制详情）；`approval.requested` → node-notifier OS 通知。
 
 ---
 
 ## 5. 上下文装配（`contextManagement/`）
 
-### 5.1 buildInteractionHistory（history.ts）——单次运行的上下文总装
+history.ts 提供三个纯函数（持久化形态 ↔ 线协议形态的投影）：
 
-```text
-宏合并（persisted contextItems 宏 + 当前输入提取的宏，local 覆盖 persisted）
-  → System Prompt（Rules 递归收集 + Skills markdown）
-  → 历史幽灵块解码 → 文件版本地图（差分更新用）
-  → 当前输入 TemplateEngine 渲染（APPEND：收集幽灵块）
-  → 逐条处理历史（含 mutsumi_interaction 展开）→ 组装消息数组
-```
-
-### 5.2 前缀缓存一致性（重要设计约束）
-
-会话前缀被刻意保持稳定以最大化 LLM KV Cache 命中：
-
-- 文件引用按版本 + 哈希**差分更新**：内容未变只注入"回溯历史"命令，不重复注入全文
-- 任何缩短上下文的操作（Remove File、Prune Old Versions、规则/技能/宏/MCP 开关）都使从最早被修改 Cell 起的前缀缓存失效；**ContextTree 操作作废缓存是预期语义，不是 bug**
-- 不要为省事在会话中途注入易变内容破坏前缀稳定
-
-### 5.3 幽灵块（ghostBlocks.ts）
-
-- 持久化的是**结构化 GhostBlock 对象**（cell metadata `last_ghost_block`），markdown 只在发送前投影
-- 非法/旧格式 metadata 在边界解码失败时按"无 ghost block"处理，**不做迁移**（保证索引对齐用 null 占位）
-- 涉及幽灵块的修改必须走 `buildGhostStripEdits` / `decodeGhostBlock` / `collectAvailableFileVersions` 等边界函数，不要直接拼字符串
-
-### 5.4 模板引擎（templateEngine.ts）
-
-- `@[path]` 文件引用、`@[tool{json}]` 工具预执行
-- APPEND（顶层）收集进幽灵块；INLINE（递归层）直接替换进父内容
-- 工具预执行走 `executeToolCall`（控制面），与运行时 ToolExecutor 是**两条执行路径**
-- 预执行平面 = 内置 common tools + McpRegistry 当前 connected/schemaValid 的**全部** MCP 工具（与 Agent 快照无关），暴露名 `mcp__<server>__<tool>__<hash>` 与运行时一致
-- 预执行是用户手写内容，所有工具（内置与 MCP、无论 readOnlyHint）一律直接执行、**不进入审批**；由 permission.ts 的预执行模式（`withPreExecution`/`isInPreExecution`）放行，Agent 运行路径审批不受影响
-- ToolManager 缓存预执行 ToolSet，McpRegistry 状态变化（reload/断连/工具列表更新）自动失效重建
+- `assembleSystemPrompt(metadata)`：角色宏 + rules（递归收集 + 模板展开）+ skills markdown。
+- `assembleUserMessage(session, text)`：模板引擎 APPEND 渲染 + 文件哈希/版本差分 + 更新 `metadata.contextItems` + ghost block 挂到该消息 `metadata.last_ghost_block`，返回可持久化 user 消息。
+- `assembleWireHistory(session)`：每条历史 user 消息投影 ghost markdown + 图片链接解析为 image_url 分片（`projectUserMessageToWire`，steer 注入时单条复用）。
+- 前缀缓存一致性约束：会话前缀刻意保持稳定以最大化 KV Cache 命中；任何缩短上下文的操作使从最早被修改处起的前缀缓存失效，是预期语义。
+- 预执行平面（`@[tool{...}]`）：`tools.d/preExecution.ts`（独立小模块，避免 contextManagement → backend 依赖环）；`executeToolCall` 用后端注册的共享 ephemeral 会话（`registerPreExecutionSessionFactory`）。
 
 ---
 
-## 6. 配置系统与工具系统（`config/` + `registry/` + `tools.d/`）
+## 6. 配置 / 工具 / MCP
 
-### 6.1 配置流
-
-```text
-VS Code 设置 mutsumi.agentConfig / mutsumi.mcpServers
-  → loader（深合并内置默认）
-  → utils 校验（结构 + 交叉引用：toolSet 存在、defaultMcpServers 引用存在）
-  → resolver（创建 Agent 时解析默认：模型/规则/技能/MCP Servers）
-  → registry 原子替换
-```
-
-配置变化处理：**先整体校验候选，成功才替换运行时 registry**；失败保留旧有效配置并报错，不允许半更新。只有 `mutsumi.mcpServers` 变化才重连 MCP；`agentConfig` 单独变化不重启 Server。
-
-### 6.2 工具链路：两套体系，一次组合
-
-内置（静态）与 MCP（动态）在 `createToolSetForAgent` 组合为单次运行的 `ToolSet`：
-
-```text
-内置:  AgentType.toolSets → ToolSetRegistry.getCombinedToolSet → ITool[]
-MCP:   AgentMetadata.enabledMcpTools ∩ McpRegistry 当前可用 → McpToolAdapter[]
-子Agent: parent_agent_id 存在 → task_finish
-```
-
-反直觉点：
-
-- MCP 工具**不允许**出现在 `agentConfig.toolSets` 中——toolSets 只认静态内置工具
-- `AgentType.defaultMcpServers` 只在 Agent 创建时生成 `enabledMcpTools` **冻结快照**，之后不参与运行权限；运行时 MCP 能力 = 快照 ∩ 当前连接可用工具
-- `ToolSet.addTool` 拒绝重名（禁止 `Map.set` 静默覆盖）
-- `query_codebase` 按 embedding endpoint 是否配置被条件剔除
-- `ToolManager`（toolManager.ts 中的控制面管理器）只服务控制面/预执行场景，Agent 运行不使用它；其预执行 ToolSet 含全部可用 MCP 工具并随 registry 变化失效（见 5.4）
-
-### 6.3 MCP 宿主（`mcp/`）
-
-- 扩展级单例 `McpRegistry`：统一连接（stdio / Streamable HTTP）、`tools/list` 发现、状态跟踪、`tools/call`、串行 reload、dispose。**无连接池、无自动重连、无 per-agent 连接**
-- `McpToolAdapter implements ITool`：schema 校验、`readOnlyHint === true` 自动执行（其余走 permission 审批）、结果文本化
-- 暴露名 `mcp__<server>__<tool>__<hash>`（逻辑身份与模型名分离）；二进制/非文本结果只投影摘要，绝不把 base64 塞入上下文
-- 设计细节见 `docs/mcp-host-final-target.md`
-
-### 6.4 审批（permission.ts）
-
-`requestApproval` 是唯一审批入口，内部处理：AutoApprove、预执行模式（用户手写的 `@[tool{...}]` 调用一律自动放行，Rules 解析只是其中一个场景）、审批边栏（approvalManager）、拒绝原因、**取消**（监听 ToolContext abort，取消后移除 pending 请求）。任何工具都不得直接操作审批 UI。
+- 配置流（`config/` + `registry/`）：整体校验候选 → 原子替换 → 仅 `mutsumi.mcpServers` 变化才重连 MCP。
+- 工具链路：`createToolSetForAgent` 组合内置 + MCP 快照 ∩ 当前可用 + 子 Agent task_finish。MCP 工具不进 toolSets；`ToolSet.addTool` 拒绝重名。
+- MCP 宿主：单例 McpRegistry、无连接池/自动重连；`McpToolAdapter` readOnlyHint 自动执行，其余经 `session.requestApproval` 审批。
+- RAG/codebase：`query_codebase` 按 embedding endpoint 是否配置被条件剔除。
 
 ---
 
 ## 7. 激活时序与装配（extension.ts）
 
-`activate()` 的顺序有依赖关系，**不可随意调整**：
-
 ```text
 debugLogger / toolsLogger 初始化
-  → ToolRegistry.initialize()（静态内置工具表）
-  → loadMutsumiConfig + 校验 + ToolSetRegistry/AgentTypeRegistry 初始化
-  → McpRegistry.reload(config.mcpServers)（并发连接全部 Server，单点失败降级为 error）
-  → SkillManager.initialize（扫描 skills）
-  → Codebase/RAG 服务
-  → AgentOrchestrator.initialize（从磁盘扫描 .mutsumi/*.mtm 重建内存注册表）
-  → 注册 Notebook controller、serializer、命令、侧边栏、事件监听
+  → ToolRegistry.initialize()
+  → loadMutsumiConfig + 校验 + ToolSetRegistry/AgentTypeRegistry
+  → McpRegistry.reload
+  → SkillManager / Codebase / RAG
+  → AgentBackend 构造 + initialize()（scanAllAgents + registerBackendHandlers + 预执行会话工厂注册）
+  → AgentSidebarProvider（三棵树）
+  → 配置变化监听（原子替换 + MCP 按需 reload）
+  → AdapterRegistry：Lite + WebView 适配器 activate
+  → 通知微前端订阅（session.error / approval.requested）
+  → .mtm 删除 watcher → backend.notifyFileDeleted
+  → 命令注册（newAgent/copyReference/clearToolCache/testRagSearch）+ activateEditSupport
 ```
 
-事件监听要点：
-
-- 配置变化：`mutsumi.mcpServers` / `mutsumi.agentConfig` → 整体校验 → 原子替换 → （仅 mcpServers 变化时）registry reload → 刷新侧边栏
-- notebook 打开/保存：与 AgentOrchestrator 注册表同步
-- 侧边栏订阅：active notebook 变化、notebook metadata 变化、MCP registry 变化、配置 reload 完成
+当前命令集：`newAgent`（原生 QuickPick + 后端 createSession + openWith）、`openAgentFile`、审批三命令（`approveRequest`/`rejectRequest`/`customRequestAction`，发 FtB）、shell 任务三命令、`copyReference`、`clearToolCache`、`testRagSearch`。
 
 ---
 
 ## 8. 开发陷阱 checklist
 
-1. 新增工具：实现 `ITool`，注册进 `ToolRegistry.TOOL_NAME_MAPPING`，之后才可被 toolSets 引用；需要缓存才设 `shouldCache`
-2. 新增命令/菜单：必须同步 package.json（`contributes.commands` + `menus` 的 `when: viewItem == ...`）与 l10n bundle（en/zh-cn），否则 UI 缺失且类型检查不报错
-3. 新增会话级 metadata 字段：在 `AgentMetadata` 加可选字段，确认 serializer / fileOps / compress 路径保留它（serializer 透明 round-trip，但创建/复制/压缩路径可能丢弃）
-4. metadata 更新一律不可变展开（`{...}`）后经 WorkspaceEdit 写回；VS Code 的 metadata 是冻结对象
-5. MCP 相关改动：遵守"快照冻结、运行交集、失败降级"三原则；不要引入自动重连/连接池
-6. 上下文相关改动：默认考虑前缀缓存一致性；ContextTree 操作作废缓存是预期行为
-7. async 初始化（如 MCP 连接）不得阻塞 `activate()` 过久；失败必须降级而不是抛断整个扩展
-8. `GenericCellData` / `messagesToGenericCells` 是 Notebook 与 Headless 共用的协议，改动 serializer 前先评估两边的兼容
-9. 不修改 `docs/vscode-api.md`（外部 API 快照，内容极长，只能 grep）
+1. **新增事件**：events.ts 加 payload 映射 + 名字数组；FtB 处理器漏一个编译报错。改变状态的 FtB 必须广播对应 BtF。
+2. **后端禁 UI**：backend/ 与 agent/ 不得 import vscode.window / Notebook / Webview 类型；需要用户可见的通知 → 广播 `session.error`。
+3. **前端互不通信**：想知道别的前端做了什么 → 等后端的 BtF 事实，永不监听 FtB。
+4. 新增工具：实现 `ITool`，注册进 `ToolRegistry.TOOL_NAME_MAPPING`；审批一律 `context.session.requestApproval*`。
+5. edit/write 默认不弹 DiffEditor（custom action `localOnly` 触发）；事务机关窗清理由 EditTransactionManager 自闭环。
+6. metadata/history 修改一律经 BackendSession 方法 → 落盘 → 广播；不要直接写文件（sessionStore 是唯一写口）。
+7. 上下文相关改动：默认考虑前缀缓存一致性；缩短上下文作废缓存是预期行为。
+8. WebView UI 改动：`ui/` 下代码只能 import 纯类型/纯工具（不能 import 宿主模块）；静态文案由宿主 `t()` 翻译后经 initial-data 注入。
+9. 新增命令/菜单：同步 package.json（contributes + menus when）与 l10n bundle（en/zh-cn）。
+10. 不修改 `docs/vscode-api.md`（外部 API 快照，内容极长，只能 grep）。
+11. 压缩功能当前不存在；其回归挂钩的设计见 `docs/AGENT_BACKEND_REFACTOR_DESIGN_CN.md`。
 
 ---
 
@@ -310,8 +197,8 @@ debugLogger / toolsLogger 初始化
 包管理器为 **pnpm**（`packageManager: pnpm@12.4.1`）。新环境首次构建前必须 `corepack enable`（Node ≥ 24 自带 corepack）安装 pnpm shim，否则终端与 vsce（它按 `packageManager` 字段调用 pnpm）都找不到 `pnpm` 命令。pnpm 配置集中在 `pnpm-workspace.yaml`：**`nodeLinker: hoisted`** 是为了让 vsce 的 `npm ls` 依赖分析继续工作，从而使 better-sqlite3 等 4 个原生 external 正常进入 vsix；**`allowBuilds`** 是依赖 install 脚本的白名单（pnpm ≥11 不再读 package.json 的 `pnpm` 字段）。新增带 install 脚本的原生依赖时必须把它加进 `allowBuilds`，否则 `pnpm install` 会以 `ERR_PNPM_IGNORED_BUILDS` 中止。禁止回退 npm（`#ref&path:` 等 pnpm 私有语法与 lockfile 不兼容）。
 
 ```bash
-pnpm run check-types   # tsc --noEmit（含 renderer tsconfig）
-pnpm run compile       # 类型检查 + 开发打包
+pnpm run check-types   # tsc --noEmit（主 tsconfig + webview UI 的 tsconfig.renderer.json）
+pnpm run compile       # 类型检查 + 开发打包（dist/extension.js + dist/webview.js）
 node esbuild.js        # 打包（--watch 开发）
 pnpm run package       # 出 .vsix（vsce package；自动触发 prepublish = 类型检查 + production 打包）
 ```
@@ -322,11 +209,11 @@ pnpm run package       # 出 .vsix（vsce package；自动触发 prepublish = �
 
 ## 10. 重要参考文档
 
+- `docs/AGENT_BACKEND_REFACTOR_DESIGN_CN.md` — 后端架构的完整设计蓝本：事件协议、运行语义、行为契约
 - `docs/mcp-host-final-target.md` — MCP 宿主最终目标状态
 - `docs/AGENT_TYPES_DESIGN.md`（及 `_CN`）— AgentType 角色系统设计
 - `docs/PROMPT_ENGINEERING_DESIGN.md`（及 `_CN`）— Prompt 工程与上下文设计
-- `docs/CHANGES_IN_TOOL_SYSTEM_CN.md` — 工具系统演进说明
-- `src/types.ts` — 核心类型（`AgentMetadata`、`AgentMessage`、`AgentContext`）
+- `src/types.ts` — 核心类型（`AgentMetadata`、`AgentMessage`、`AgentStateInfo`）
 
 ---
 

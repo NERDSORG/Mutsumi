@@ -1,6 +1,5 @@
 import type { ITool, ToolContext } from "../interface";
 import { resolveUri } from "../utils";
-import { requestApproval } from "../permission";
 import { t } from "../../i18n";
 import { toolsLogger } from "../toolsLogger";
 import * as path from "path";
@@ -63,10 +62,9 @@ export const shellTool: ITool = {
 				shellName,
 				background ? t("approval.shell.yes") : t("approval.shell.no"),
 			);
-			const rejectionMsg = await requestApproval(
+			const rejectionMsg = await context.session.requestApproval(
 				t("approval.shell.action", cmd, uriInput),
 				uriInput,
-				context,
 				"shell",
 				details,
 			);

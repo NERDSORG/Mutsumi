@@ -15,7 +15,6 @@ import {
     DEFAULT_MODEL_SELECTION,
     VALID_PROVIDER_TYPES
 } from './types';
-
 /**
  * Resolved model selection: the canonical { model, provider } pair plus the
  * matched provider entry from the same single provider lookup.
@@ -150,16 +149,6 @@ export function getModelsConfig(): Record<string, string[]> {
 }
 
 /**
- * Gets the list of all available model names from the models configuration.
- * @description Flattens the provider-to-models mapping and returns unique model names.
- * @returns {string[]} Array of unique model names
- */
-export function getAvailableModelNames(): string[] {
-    const models = getModelsConfig();
-    return [...new Set(Object.values(models).flat())];
-}
-
-/**
  * Resolves the default model selection from VS Code settings.
  * @description Reads mutsumi.defaultModel and validates it through the gate.
  * Falls back to the built-in default pair when unset.
@@ -192,28 +181,6 @@ export function getTitleModelSelection(): ModelSelection | undefined {
 }
 
 /**
- * Resolves the conversation compression model selection from VS Code settings.
- * @description Reads mutsumi.compressModel and validates it through the gate.
- * Falls back to titleGeneratorModel, then to the default model selection.
- * @returns {ModelSelection} Validated compress model/provider pair
- * @throws {Error} If no valid selection can be resolved
- */
-export function getCompressModelSelection(): ModelSelection {
-    const config = vscode.workspace.getConfiguration('mutsumi');
-    const compressModel = config.get<ModelSelection>('compressModel');
-    if (compressModel !== undefined && compressModel !== null) {
-        return resolveModelSelection(compressModel);
-    }
-
-    const titleModel = getTitleModelSelection();
-    if (titleModel) {
-        return titleModel;
-    }
-
-    return getDefaultModelSelection();
-}
-
-/**
  * Sanitizes a string to be safe for use as a file name.
  * @description Removes or replaces characters that are invalid in file systems
  * and normalizes whitespace.
@@ -225,30 +192,6 @@ export function sanitizeFileName(name: string): string {
         .replace(/[\\/:*?"<>|]/g, '-')
         .replace(/\s+/g, ' ')
         .trim();
-}
-
-/**
- * Ensures a file name is unique by appending a numeric suffix if needed.
- * @description Checks against existing names and generates a unique variant
- * by adding "-1", "-2", etc. as needed.
- * @param {string} baseName - Base file name without extension
- * @param {string[]} existingNames - Array of existing file names to check against
- * @returns {string} Unique file name
- */
-export function ensureUniqueFileName(baseName: string, existingNames: string[]): string {
-    if (!existingNames.includes(baseName)) {
-        return baseName;
-    }
-
-    let counter = 1;
-    let newName = `${baseName}-${counter}`;
-
-    while (existingNames.includes(newName)) {
-        counter++;
-        newName = `${baseName}-${counter}`;
-    }
-
-    return newName;
 }
 
 /**

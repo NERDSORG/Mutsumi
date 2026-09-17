@@ -12,27 +12,6 @@ import type { AgentStateInfo, AgentRuntimeStatus } from '../types';
 // Re-export imported types
 export type { AgentStateInfo, AgentRuntimeStatus };
 
-/** Concrete reasoning effort levels sent to the LLM provider. */
-export type ReasoningEffort = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-
-/** User-configurable reasoning effort values, including provider-default behavior. */
-export type ReasoningEffortSetting = ReasoningEffort | 'default';
-
-/**
- * Supported reasoning effort setting values in display order.
- * @remarks QuickPick and HTTP validation import this constant directly as the single source of truth.
- */
-export const REASONING_EFFORT_SETTING_VALUES: readonly ReasoningEffortSetting[] = [
-    'default',
-    'off',
-    'minimal',
-    'low',
-    'medium',
-    'high',
-    'xhigh',
-    'max'
-];
-
 /**
  * Normalizes a configured reasoning effort for request transmission without mutating the value.
  * @param {string | undefined | null} value - Raw metadata or configuration value

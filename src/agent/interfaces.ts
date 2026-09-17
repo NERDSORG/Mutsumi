@@ -2,14 +2,13 @@
  * @fileoverview Pure interface contracts for the agent module.
  * @module agent/interfaces
  * @description Pure interfaces only. Type aliases, constants, and functions
- * (e.g. {@link ReasoningEffort}, {@link REASONING_EFFORT_SETTING_VALUES},
- * `normalizeReasoningEffort`) live in `agent/types.ts` per the module
+ * (e.g. `normalizeReasoningEffort`) live in `agent/types.ts` per the module
  * file-division convention.
  */
 
 import type { ChatProvider, Message, ProviderType, Tool, ToolCall } from '@moonshot-ai/kosong';
 import type { AgentMessage, ModelSelection } from '../types';
-import type { RenderBlock } from '../notebook/renderTypes';
+import type { RenderBlock } from '../shared/renderTypes';
 
 /**
  * Options for configuring the agent runner.

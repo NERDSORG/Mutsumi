@@ -1,15 +1,13 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as crypto from "crypto";
-import { AgentMessage } from "../types";
 import { TextDecoder } from "util";
 import { ToolManager } from "../tools.d/toolManager";
 import type { ToolContext } from "../tools.d/interface";
 import type { ContentPart } from "@moonshot-ai/kosong";
 import { ContextItem } from "../types";
-import { LiteAdapter } from "../adapters/liteAdapter";
 import { ToolSession } from "../tools.d/toolSession";
-import { withPreExecution } from "../tools.d/permission";
+import { getPreExecutionSession, withPreExecution } from "../tools.d/preExecution";
 
 /** Image regex: matches Markdown images in ![alt](uri) format */
 export const IMG_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
@@ -238,8 +236,7 @@ export async function executeToolCall(
 	allowedUris: string[],
 ): Promise<string> {
 	const tm = ToolManager.getInstance();
-	const liteAdapter = new LiteAdapter();
-	const session = await liteAdapter.createSession();
+	const session = getPreExecutionSession();
 	const context: ToolContext = {
 		allowedUris: allowedUris,
 		session,

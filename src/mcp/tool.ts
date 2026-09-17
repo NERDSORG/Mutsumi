@@ -2,7 +2,6 @@ import type { Tool as KosongTool } from "@moonshot-ai/kosong";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { ITool, ToolContext } from "../tools.d/interface";
 import type { McpToolCaller } from "./interfaces";
-import { requestApproval } from "../tools.d/permission";
 import { getMcpToolExposedName, getMcpToolSchemaError, projectMcpToolResult } from "./utils";
 
 /** Lightweight ITool projection of a discovered MCP tool. */
@@ -35,10 +34,9 @@ export class McpToolAdapter implements ITool {
 
 	async execute(args: Record<string, unknown>, context: ToolContext): Promise<string> {
 		if (this.tool.annotations?.readOnlyHint !== true) {
-			const approval = await requestApproval(
+			const approval = await context.session.requestApproval(
 				`Call MCP tool ${this.originalToolName}`,
 				`mcp://${this.serverId}/${this.originalToolName}`,
-				context,
 				this.name,
 				`${this.tool.description ?? ""}\n\nServer: ${this.serverId}\nTool: ${this.originalToolName}\nArguments: ${safeJson(args)}`,
 			);
