@@ -22,7 +22,6 @@ import { McpRegistry } from '../mcp/registry';
 import { getModelsConfig } from '../utils';
 import { isAutoApproveEnabled } from './approvalManager';
 import type { ApprovalRequestManager } from './approvalManager';
-import type { DispatchSessionManager } from './dispatchManager';
 import type { BackendSession } from './backendSession';
 import type { ContextPanelData, SessionSnapshot, Turn } from './events';
 
@@ -204,7 +203,6 @@ async function buildContextPanelData(metadata: AgentMetadata): Promise<ContextPa
 export async function buildSessionSnapshot(
     session: BackendSession,
     approvals: ApprovalRequestManager,
-    dispatches: DispatchSessionManager,
 ): Promise<SessionSnapshot> {
     const metadata = session.metadata;
     const isSubAgent = !!metadata.parent_agent_id;
@@ -253,7 +251,6 @@ export async function buildSessionSnapshot(
         reason: session.lastStopReason,
         queuedCount: session.queuedCount,
         pendingApprovals: approvals.getPendingRequests(session.sessionId),
-        pendingDispatches: dispatches.getPendingDispatches().filter(d => d.parentId === session.sessionId),
         availableModels: getModelsConfig(),
         autoApproveEnabled: isAutoApproveEnabled(),
         contextPanel: await buildContextPanelData(metadata),

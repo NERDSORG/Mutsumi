@@ -1,12 +1,13 @@
 import { ITool, ToolContext } from '../interface';
 import { AgentTypeRegistry } from '../../registry/agentTypeRegistry';
 import { resolveUri } from '../utils';
+import { t } from '../../i18n';
 
 export const dispatchSubagentsTool: ITool = {
     name: 'dispatch_subagents',
     definition: {
         name: 'dispatch_subagents',
-        description: 'Split into multiple parallel sub-agents. Creates new agent sessions immediately. The current agent will suspend until all sub-agents are finished (task_finish called) or their sessions are deleted.',
+        description: 'Split into multiple parallel sub-agents. Sub-agents are created and start running in the background immediately after user approval. This call returns right away with their session ids — it does NOT wait for them. Each sub-agent reports back when it finishes (task_finish): completion reports arrive as user messages. You can also message them (or they you) at any time with the communicate tool.',
         parameters: {
             type: 'object',
             properties: {
@@ -84,16 +85,25 @@ export const dispatchSubagentsTool: ITool = {
                 return agent;
             });
 
-            // Suspends until the dispatch is approved and all sub-agents have
-            // finished (or been deleted). Approved sub-agents start in the
-            // background immediately.
-            const report = await context.session.requestDispatch(
+            // Approval gate first: nothing is created unless approved.
+            const details = normalizedSubAgents
+                .map((sub: any, i: number) => `${i + 1}. [${sub.agent_type || 'implementer'}] ${String(sub.prompt).slice(0, 200)}\n   allowed_uris: ${(sub.allowed_uris ?? []).join(', ')}`)
+                .join('\n');
+            const rejectionMsg = await context.session.requestApproval(
+                t('approval.dispatch.action', normalizedSubAgents.length),
+                context.session.fileUri?.toString() ?? parentUuid,
+                'dispatch_subagents',
+                details,
+            );
+            if (rejectionMsg !== null) {
+                return rejectionMsg;
+            }
+
+            // Create + start immediately; returns the children manifest.
+            return await context.session.requestDispatch(
                 context_broadcast,
                 normalizedSubAgents,
-                context.abortSignal
             );
-            
-            return report;
         } catch (err: any) {
             return `Error during dispatching: ${err.message}`;
         }
@@ -110,7 +120,7 @@ export const taskFinishTool: ITool = {
     name: 'task_finish',
     definition: {
         name: 'task_finish',
-        description: 'Mark task as complete and submit report.',
+        description: 'Mark task as complete and submit report. The report is delivered to your parent agent as a message. May be called again later to send an updated report.',
         parameters: {
             type: 'object',
             properties: {
@@ -132,12 +142,48 @@ export const taskFinishTool: ITool = {
         }
 
         return 'Task Finished. Report submitted.';
-    },
-    prettyPrint: (_args: any) => {
+    },    prettyPrint: (_args: any) => {
         return `✅ Mutsumi finished task`;
     },
     argsToCodeBlock: [ 'context_summary' ],
     codeBlockFilePaths: [ undefined ]
+};
+
+export const communicateTool: ITool = {
+    name: 'communicate',
+    definition: {
+        name: 'communicate',
+        description: 'Send a message to another agent session by its session UUID (e.g. your parent agent, or a sibling sub-agent from the same dispatch). The message arrives as a user message in that session: if it is running, it is injected at the next round boundary; if it is stopped, it wakes up to process your message.',
+        parameters: {
+            type: 'object',
+            properties: {
+                target_session_id: { type: 'string', description: 'The target agent session UUID.' },
+                message: { type: 'string', description: 'The message content. Markdown is supported; @[file] references are expanded in the target session.' }
+            },
+            required: ['target_session_id', 'message']
+        }
+    },
+    execute: async (args: any, context: ToolContext) => {
+        const targetId = args.target_session_id;
+        const message = args.message;
+        if (!targetId || typeof targetId !== 'string') {
+            return 'Error: Missing "target_session_id" argument.';
+        }
+        if (typeof message !== 'string' || !message.trim()) {
+            return 'Error: Missing or empty "message" argument.';
+        }
+        const myUuid = context.session.metadata.uuid;
+        if (targetId === myUuid) {
+            return 'Error: Cannot send a message to yourself.';
+        }
+        const text = `[Agent Message — from '${context.session.metadata.name}' (${myUuid})]\n\n${message}`;
+        return context.session.deliverAgentMessage(targetId, text);
+    },
+    prettyPrint: (args: any) => {
+        return `💬 Mutsumi sent a message to ${String(args.target_session_id ?? '').slice(0, 8)}`;
+    },
+    argsToCodeBlock: ['message'],
+    codeBlockFilePaths: [undefined]
 };
 
 export const getAgentTypesTool: ITool = {

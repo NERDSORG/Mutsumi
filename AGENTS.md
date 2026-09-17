@@ -15,7 +15,6 @@ src/
 │   ├── sessionStore.ts    # .mtm 直读写（每文件写队列），唯一文件写口
 │   ├── agentRegistry.ts   # 会话注册表 + 创建/重命名/删除/冲突消毒
 │   ├── approvalManager.ts # 审批权威（ApprovalRequestManager，事件化）
-│   ├── dispatchManager.ts # 子 Agent 派发协调（DispatchSessionManager）
 │   ├── titleGenerator.ts  # 首轮完成后生成标题（ephemeral 会话）
 │   ├── snapshot.ts        # 历史 → session.state 快照（水合）
 │   ├── events.ts          # FtB/BtF 事件协议（payload 映射 + 名字注册表，satisfies 校验穷尽）
@@ -85,7 +84,7 @@ src/
 ### 2.5 审批 / 派发 / 标题 / 快照
 
 - **ApprovalRequestManager**：自动放行（全局开关 + 预执行平面）→ 留痕；否则广播 `approval.requested` 挂起，首个 `approval.respond` 定案并广播 `approval.resolved`（其余前端立即撤卡）。拒绝理由随 respond 载荷携带。`onDidChangeRequests` 供侧栏审批树订阅。
-- **DispatchSessionManager**：子 Agent 文件立即落盘 → 广播 `dispatch.requested` → approve 则后端直接后台开跑，reject 则删除子会话文件；子 `task_finish` → 聚合报告 → resolve 父的挂起 Promise。
+- **派发与子 Agent**：`dispatch_subagents` 是普通工具：审批（先于创建，拒绝即不建文件）→ `session.requestDispatch` 创建子会话并后台立即启动 → **工具立即返回**（带子会话 UUID 清单）。结果回收复用 steer：子 `task_finish` → 向父会话注入带发送者身份的 user 消息（运行中→轮次边界注入；停着→唤醒）。`communicate` 工具（免审批）让任意两会话互通（`target_session_id` + `message`），与 task_finish 共享同一投递原语 `session.deliverAgentMessage`。子 Agent 可多次 task_finish。打断级联到整棵 Agent 树；删除会话不级联、但会向父会话投递"已删除"通知。
 - **TitleGenerator**：首轮用户消息完成后 ephemeral 单轮 runner 生成标题，走 `session.rename` 同一路径。
 - **snapshot.ts**：历史 → `session.state` 快照（turns + currentTurn + pendingApprovals + contextPanel + availableModels）。`buildInteractionRenderBlocks` 把 assistant/tool 消息组渲染成 RenderBlock[]——它依赖 ToolManager/MCP 注册表，必须在宿主做。水合用快照，不做逐事件回放。
 

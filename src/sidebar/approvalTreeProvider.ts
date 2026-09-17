@@ -1,17 +1,16 @@
 import * as vscode from 'vscode';
-import { ApprovalTreeItem, DispatchTreeItem } from './approvalTreeItem';
+import { ApprovalTreeItem } from './approvalTreeItem';
 import type { AgentBackend } from '../backend/agentBackend';
 
 /**
  * Union type for tree items in the approval sidebar
  */
-export type ApprovalSidebarItem = ApprovalTreeItem | DispatchTreeItem;
+export type ApprovalSidebarItem = ApprovalTreeItem;
 
 /**
  * @description Approval request tree data provider: the always-on fallback
  * frontend for approvals. Shows tool approval requests (from the backend
- * ApprovalRequestManager) and pending dispatch approvals (from the backend
- * DispatchSessionManager).
+ * ApprovalRequestManager).
  * @class ApprovalTreeDataProvider
  * @implements {vscode.TreeDataProvider<ApprovalSidebarItem>}
  */
@@ -24,7 +23,6 @@ export class ApprovalTreeDataProvider implements vscode.TreeDataProvider<Approva
 
     constructor(private readonly backend: AgentBackend) {
         this.backend.approvals.onDidChangeRequests(() => this.refresh());
-        this.backend.dispatches.onDidChange(() => this.refresh());
     }
 
     getTreeItem(element: ApprovalSidebarItem): vscode.TreeItem {
@@ -36,17 +34,9 @@ export class ApprovalTreeDataProvider implements vscode.TreeDataProvider<Approva
             return Promise.resolve([]);
         }
 
-        const items: ApprovalSidebarItem[] = [];
-
-        // Pending dispatch approvals first
-        for (const dispatch of this.backend.dispatches.getPendingDispatches()) {
-            items.push(new DispatchTreeItem(dispatch));
-        }
-
         // Approval records (already sorted: pending first, newer first)
-        for (const record of this.backend.approvals.getAllRequests()) {
-            items.push(new ApprovalTreeItem(record));
-        }
+        const items: ApprovalSidebarItem[] = this.backend.approvals.getAllRequests()
+            .map(record => new ApprovalTreeItem(record));
 
         return Promise.resolve(items);
     }

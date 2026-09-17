@@ -169,7 +169,6 @@
   "chat.reject": "Reject",
   "chat.rejectWithReason": "Reject with reason",
   "chat.rejectReasonPlaceholder": "Reason (empty = terminate session)",
-  "chat.dispatchTitle": "Dispatch {0} sub-agents",
   "chat.sessionDeleted": "This session has been deleted.",
   "chat.debugResultTitle": "Complete LLM Context",
   "chat.close": "Close",

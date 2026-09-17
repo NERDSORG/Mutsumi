@@ -42,6 +42,7 @@ export {
  * - read: File reading, search, and info tools (read-only)
  * - deliver: File writing, editing, shell execution (write operations)
  * - dispatch: Agent orchestration tools (dispatch_subagents, get_agent_types)
+ * - communicate: Inter-session messaging (communicate)
  */
 export const DEFAULT_MUTSUMI_CONFIG: MutsumiConfig = {
 	version: 1,
@@ -67,10 +68,11 @@ export const DEFAULT_MUTSUMI_CONFIG: MutsumiConfig = {
 			"mkdir",
 		],
 		dispatch: ["dispatch_subagents", "get_agent_types"],
+		communicate: ["communicate"],
 	},
 	agentTypes: {
 		chat: {
-			toolSets: ["read"],
+			toolSets: ["read", "communicate"],
 			defaultModel: { model: "kimi-for-coding", provider: "kimi-for-coding" },
 			defaultRules: ["default/chat.md"],
 			defaultSkills: [],
@@ -78,7 +80,7 @@ export const DEFAULT_MUTSUMI_CONFIG: MutsumiConfig = {
 			isEntry: true,
 		},
 		implementer: {
-			toolSets: ["read", "deliver", "dispatch"],
+			toolSets: ["read", "deliver", "dispatch", "communicate"],
 			defaultModel: { model: "kimi-for-coding", provider: "kimi-for-coding" },
 			defaultRules: ["default/implementer.md"],
 			defaultSkills: [],
@@ -86,7 +88,7 @@ export const DEFAULT_MUTSUMI_CONFIG: MutsumiConfig = {
 			isEntry: true,
 		},
 		orchestrator: {
-			toolSets: ["read", "deliver", "dispatch"],
+			toolSets: ["read", "deliver", "dispatch", "communicate"],
 			defaultModel: { model: "kimi-for-coding", provider: "kimi-for-coding" },
 			defaultRules: ["default/orchestrator.md"],
 			defaultSkills: [],
@@ -94,7 +96,7 @@ export const DEFAULT_MUTSUMI_CONFIG: MutsumiConfig = {
 			isEntry: true,
 		},
 		reviewer: {
-			toolSets: ["read"],
+			toolSets: ["read", "communicate"],
 			defaultModel: { model: "kimi-for-coding", provider: "kimi-for-coding" },
 			defaultRules: ["default/reviewer.md"],
 			defaultSkills: [],

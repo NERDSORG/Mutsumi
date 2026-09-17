@@ -11,7 +11,6 @@ import type { BackendSession } from './backendSession';
 import type { EventBus } from './eventBus';
 import type { SessionStore } from './sessionStore';
 import type { ApprovalRequestManager } from './approvalManager';
-import type { DispatchSessionManager } from './dispatchManager';
 import type { AgentRegistry } from './agentRegistry';
 import type { ApprovalRequestInfo } from './events';
 
@@ -33,8 +32,11 @@ export interface BackendSessionDeps {
     bus: EventBus;
     store: SessionStore;
     approvals: ApprovalRequestManager;
-    dispatches: DispatchSessionManager;
     registry: AgentRegistry;
+    /** Materialize (or fetch) a registered session by uuid. */
+    materializeSession: (uuid: string) => Promise<BackendSession>;
+    /** Fetch an already-materialized session by uuid (undefined if cold). */
+    getMaterializedSession: (uuid: string) => BackendSession | undefined;
     /** Triggered after the run answering the session's first user message. */
     onFirstTurnCompleted?: (session: BackendSession) => void;
 }
@@ -56,6 +58,8 @@ export interface CreateAgentOptions {
     name?: string;
     /** Initial prompt; kept on the registry entry, enqueued by the caller. */
     prompt?: string;
+    /** Pre-generated uuid override (dispatch pre-generates to embed identity blocks). */
+    uuid?: string;
     allowedUris?: string[];
     modelSelection?: ModelSelection;
     rules?: string[];
@@ -116,35 +120,4 @@ export interface DispatchRequestItem {
     allowed_uris: string[];
     agent_type?: string;
     modelSelection?: ModelSelection;
-}
-
-/** Child manifest entry broadcast with `dispatch.requested`. */
-export interface DispatchChildInfo {
-    sessionId: string;
-    prompt: string;
-    agentType: string;
-    allowedUris: string[];
-}
-
-/** A parent agent suspended while its dispatched children run. */
-export interface DispatchSession {
-    parentId: string;
-    requestId: string;
-    resolve: (report: string) => void;
-    reject: (reason?: any) => void;
-    childUuids: Set<string>;
-    /** Child sessions in creation order (aligned with children). */
-    childSessions: BackendSession[];
-    children: DispatchChildInfo[];
-    results: Map<string, string>;
-    deletedChildren: Set<string>;
-    /** Whether a dispatch.respond has arrived. */
-    responded: boolean;
-}
-
-/** Sidebar-facing view of a pending dispatch approval. */
-export interface PendingDispatchInfo {
-    requestId: string;
-    parentId: string;
-    children: DispatchChildInfo[];
 }

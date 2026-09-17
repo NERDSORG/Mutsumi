@@ -30,25 +30,6 @@ export interface AgentRunOptions {
 }
 
 /**
- * Dispatch session information for managing sub-agent lifecycle.
- * @interface DispatchSession
- */
-export interface DispatchSession {
-    /** Parent agent UUID that created this dispatch session */
-    parentId: string;
-    /** Resolve function to complete the dispatch session */
-    resolve: (value: string | PromiseLike<string>) => void;
-    /** Reject function to fail the dispatch session */
-    reject: (reason?: any) => void;
-    /** Set of child agent UUIDs created in this session */
-    childUuids: Set<string>;
-    /** Map of child agent UUID to their results */
-    results: Map<string, string>;
-    /** Set of child agent UUIDs that have been deleted */
-    deletedChildren: Set<string>;
-}
-
-/**
  * Options for a single streamed generation round.
  * @interface StreamGenerateOptions
  */

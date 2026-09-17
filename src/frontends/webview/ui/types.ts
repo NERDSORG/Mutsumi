@@ -25,12 +25,6 @@ export interface UiContext {
     label: (key: string) => string;
 }
 
-/** A dispatch approval card's data (from dispatch.requested). */
-export interface DispatchCardData {
-    requestId: string;
-    children: { sessionId: string; prompt: string; agentType: string; allowedUris: string[] }[];
-}
-
 /** Aggregate mutable UI state for one panel. */
 export interface ChatState {
     metadata: AgentMetadata | null;
@@ -40,7 +34,6 @@ export interface ChatState {
     contextPanel: ContextPanelData | null;
     availableModels: Record<string, string[]>;
     approvals: ApprovalRequestInfo[];
-    dispatches: DispatchCardData[];
     /** Locally tracked sends that have not been committed yet (queue bar). */
     pendingSends: { text: string; mode: 'queue' | 'steer' }[];
     /** The session file was deleted; the panel shows a notice. */

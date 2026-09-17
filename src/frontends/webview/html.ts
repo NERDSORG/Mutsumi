@@ -34,7 +34,6 @@ export function buildWebviewLabels(): Record<string, string> {
         'chat.reject': t('chat.reject'),
         'chat.rejectWithReason': t('chat.rejectWithReason'),
         'chat.rejectReasonPlaceholder': t('chat.rejectReasonPlaceholder'),
-        'chat.dispatchTitle': t('chat.dispatchTitle'),
         'chat.sessionDeleted': t('chat.sessionDeleted'),
         'chat.debugResultTitle': t('chat.debugResultTitle'),
         'chat.close': t('chat.close'),

@@ -182,11 +182,14 @@ Agent Type 不实现通用继承。
         "dispatch": [
             "dispatch_subagents",
             "get_agent_types"
+        ],
+        "communicate": [
+            "communicate"
         ]
     },
     "agentTypes": {
         "chat": {
-            "toolSets": ["read"],
+            "toolSets": ["read", "communicate"],
             "defaultModel": { "model": "kimi-for-coding", "provider": "kimi-for-coding" },
             "defaultRules": ["default/chat.md"],
             "defaultSkills": [],
@@ -194,7 +197,7 @@ Agent Type 不实现通用继承。
             "isEntry": true
         },
         "implementer": {
-            "toolSets": ["read", "deliver", "dispatch"],
+            "toolSets": ["read", "deliver", "dispatch", "communicate"],
             "defaultModel": { "model": "kimi-for-coding", "provider": "kimi-for-coding" },
             "defaultRules": ["default/implementer.md"],
             "defaultSkills": [],
@@ -202,7 +205,7 @@ Agent Type 不实现通用继承。
             "isEntry": true
         },
         "orchestrator": {
-            "toolSets": ["read", "deliver", "dispatch"],
+            "toolSets": ["read", "deliver", "dispatch", "communicate"],
             "defaultModel": { "model": "kimi-for-coding", "provider": "kimi-for-coding" },
             "defaultRules": ["default/orchestrator.md"],
             "defaultSkills": [],
@@ -210,7 +213,7 @@ Agent Type 不实现通用继承。
             "isEntry": true
         },
         "reviewer": {
-            "toolSets": ["read"],
+            "toolSets": ["read", "communicate"],
             "defaultModel": { "model": "kimi-for-coding", "provider": "kimi-for-coding" },
             "defaultRules": ["default/reviewer.md"],
             "defaultSkills": [],

@@ -86,7 +86,7 @@ export async function getSystemPrompt(
 Current Allowed URIs: ${JSON.stringify(allowedUris)}`;
 
     if (isSubAgent) {
-        prompt += `\n\n## Sub-Agent Identity\nYou are a Sub-Agent. When finishing a task, you must use the \`task_finish\` tool to report completion status to the Parent Agent.`;
+        prompt += `\n\n## Sub-Agent Identity\nYou are a Sub-Agent. When finishing a task, you must use the \`task_finish\` tool to report completion status to the Parent Agent. You may use the \`communicate\` tool to message your parent or sibling agents by their session id.`;
     }
 
     if (rulesItems.length > 0) {

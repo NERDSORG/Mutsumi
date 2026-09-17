@@ -184,7 +184,7 @@ export class AgentRegistry {
         });
         const selection = resolveModelSelection({ model: defaults.model, provider: defaults.provider });
 
-        const uuid = uuidv4();
+        const uuid = options.uuid ?? uuidv4();
         const agentDir = vscode.Uri.joinPath(workspaceRoot, '.mutsumi');
         try {
             await vscode.workspace.fs.createDirectory(agentDir);

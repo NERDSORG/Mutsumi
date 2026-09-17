@@ -2,7 +2,7 @@
  * @fileoverview AgentBackend — the singleton backend facade.
  *
  * Holds the EventBus, SessionStore, AgentRegistry, ApprovalRequestManager,
- * DispatchSessionManager, TitleGenerator and the materialized-session cache
+ * TitleGenerator and the materialized-session cache
  * (sessions are never evicted). Registers the complete FtB handler set
  * exactly once (the mapped type makes omissions a compile error).
  *
@@ -19,7 +19,6 @@ import { EventBus } from './eventBus';
 import { SessionStore } from './sessionStore';
 import { AgentRegistry } from './agentRegistry';
 import { ApprovalRequestManager, setAutoApproveEnabled } from './approvalManager';
-import { DispatchSessionManager } from './dispatchManager';
 import { BackendSession } from './backendSession';
 import type { BackendSessionDeps, BackendSessionOptions } from './interfaces';
 import { TitleGenerator } from './titleGenerator';
@@ -33,7 +32,6 @@ export class AgentBackend {
     readonly store = new SessionStore();
     readonly approvals: ApprovalRequestManager;
     readonly registry: AgentRegistry;
-    readonly dispatches: DispatchSessionManager;
     readonly titles: TitleGenerator;
 
     /** Materialized sessions by uuid (never evicted). */
@@ -45,21 +43,20 @@ export class AgentBackend {
     constructor() {
         this.approvals = new ApprovalRequestManager(this.bus);
         this.registry = new AgentRegistry(this.bus, this.store, uuid => this.getOrMaterialize(uuid));
-        this.dispatches = new DispatchSessionManager(this.bus, this.registry);
         this.sessionDeps = {
             bus: this.bus,
             store: this.store,
             approvals: this.approvals,
-            dispatches: this.dispatches,
             registry: this.registry,
+            materializeSession: uuid => this.getOrMaterialize(uuid),
+            getMaterializedSession: uuid => this.sessions.get(uuid),
             onFirstTurnCompleted: session => {
                 void this.titles.generateForSession(session);
             },
         };
         this.titles = new TitleGenerator(this.sessionDeps);
 
-        // Whenever an agent is deleted (by user action, dispatch rejection or
-        // an external file delete), drop its materialized session first.
+        // Whenever an agent is deleted, drop its materialized session first.
         this.registry.onBeforeDelete = async (uuid) => {
             const session = this.sessions.get(uuid);
             if (session) {
@@ -94,6 +91,8 @@ export class AgentBackend {
         metadata.uuid = sessionId;
         const session = new BackendSession(this.sessionDeps, metadata, context, fileUri);
         this.sessions.set(sessionId, session);
+        // Repair dangling tool calls from an interrupted/crashed previous run.
+        await session.repairLoadedHistory();
         return session;
     }
 
@@ -137,7 +136,20 @@ export class AgentBackend {
         const parentId = agent.parentId;
         await this.registry.deleteAgent(agent.uuid, { deleteFile: false });
         if (parentId) {
-            this.dispatches.handleChildDeleted(parentId, agent.uuid);
+            await this.notifyParentOfDeletedChild(parentId, agent.name, agent.uuid);
+        }
+    }
+
+    /** Tell a parent session that one of its children was deleted. */
+    private async notifyParentOfDeletedChild(parentId: string, name: string, uuid: string): Promise<void> {
+        try {
+            const parent = await this.getOrMaterialize(parentId);
+            parent.enqueueUserMessage(
+                `[System Notice] Sub-agent '${name}' (${uuid}) was deleted (cancelled).`,
+                'steer',
+            );
+        } catch {
+            // The parent may itself be gone
         }
     }
 
@@ -179,9 +191,10 @@ export class AgentBackend {
             'session.delete': payload => this.guard(payload.sessionId, async () => {
                 const entry = this.registry.get(payload.sessionId);
                 const parentId = entry?.parentId;
+                const name = entry?.name ?? payload.sessionId;
                 await this.registry.deleteAgent(payload.sessionId);
                 if (parentId) {
-                    this.dispatches.handleChildDeleted(parentId, payload.sessionId);
+                    await this.notifyParentOfDeletedChild(parentId, name, payload.sessionId);
                 }
             }),
             'session.rename': payload => this.guard(payload.sessionId, async () => {
@@ -245,14 +258,6 @@ export class AgentBackend {
                     payload.requestId,
                     payload.outcome,
                     payload.reason,
-                    payload.origin,
-                );
-            },
-            'dispatch.respond': payload => {
-                void this.dispatches.respond(
-                    payload.sessionId,
-                    payload.requestId,
-                    payload.outcome,
                     payload.origin,
                 );
             },

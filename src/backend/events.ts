@@ -19,7 +19,6 @@
 
 import type { AgentMetadata, ContextItem, McpToolSelection } from '../types';
 import type { RenderData } from '../shared/renderTypes';
-import type { PendingDispatchInfo } from './interfaces';
 
 // ============================================================================
 // Shared payload shapes
@@ -80,8 +79,6 @@ export interface SessionSnapshot {
     reason?: 'completed' | 'interrupted' | 'error';
     queuedCount: number;
     pendingApprovals: ApprovalRequestInfo[];
-    /** Dispatch approvals awaiting a response (this session as parent). */
-    pendingDispatches: PendingDispatchInfo[];
     /** provider name → model identifiers */
     availableModels: Record<string, string[]>;
     autoApproveEnabled: boolean;
@@ -138,12 +135,6 @@ export interface FtBEventMap {
         reason?: string;
         origin?: string;
     };
-    'dispatch.respond': {
-        sessionId: string;
-        requestId: string;
-        outcome: 'approve' | 'reject';
-        origin?: string;
-    };
     /** Global event (no sessionId): toggles the VSCode auto-approve setting. */
     'settings.setAutoApprove': { enabled: boolean };
 }
@@ -174,18 +165,6 @@ export interface BtFEventMap {
         requestId: string;
         outcome: 'approve' | 'reject' | 'custom';
         reason?: string;
-        origin?: string;
-    };
-    'dispatch.requested': {
-        /** Parent session id. */
-        sessionId: string;
-        requestId: string;
-        children: { sessionId: string; prompt: string; agentType: string; allowedUris: string[] }[];
-    };
-    'dispatch.resolved': {
-        sessionId: string;
-        requestId: string;
-        outcome: 'approve' | 'reject';
         origin?: string;
     };
     'context.debugResult': { sessionId: string; formatted: string };
@@ -219,7 +198,6 @@ export const FTB_EVENT_NAMES = [
     'context.removeFile',
     'context.removeMacro',
     'approval.respond',
-    'dispatch.respond',
     'settings.setAutoApprove',
 ] as const satisfies readonly (keyof FtBEventMap)[];
 
@@ -234,8 +212,6 @@ export const BTF_EVENT_NAMES = [
     'session.error',
     'approval.requested',
     'approval.resolved',
-    'dispatch.requested',
-    'dispatch.resolved',
     'context.debugResult',
     'sessions.changed',
     'settings.autoApprove',

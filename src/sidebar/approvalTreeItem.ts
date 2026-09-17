@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { t } from '../i18n';
-import type { ApprovalRequestRecord, PendingDispatchInfo } from '../backend/interfaces';
+import type { ApprovalRequestRecord } from '../backend/interfaces';
 import type { EventBus } from '../backend/eventBus';
 
 /**
@@ -65,31 +65,6 @@ export class ApprovalTreeItem extends vscode.TreeItem {
 }
 
 /**
- * @description Dispatch approval tree node: a parent agent asks to start sub-agents.
- */
-export class DispatchTreeItem extends vscode.TreeItem {
-    constructor(
-        public readonly dispatch: PendingDispatchInfo
-    ) {
-        super(
-            t('approval.dispatch.action', dispatch.children.length),
-            vscode.TreeItemCollapsibleState.None
-        );
-
-        this.description = new Date().toLocaleTimeString();
-        this.iconPath = new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.yellow'));
-        this.contextValue = 'pendingDispatch';
-
-        const md = new vscode.MarkdownString();
-        md.appendMarkdown(`**${t('approval.dispatch.action', dispatch.children.length)}**\n\n`);
-        for (const child of dispatch.children) {
-            md.appendMarkdown(`- \`${child.agentType}\`: ${child.prompt.slice(0, 200)}\n`);
-        }
-        this.tooltip = md;
-    }
-}
-
-/**
  * @description Registers approval-related commands. Buttons emit FtB events;
  * the backend settles the request and broadcasts the fact.
  * @param {vscode.ExtensionContext} context - Extension context for registering disposables
@@ -97,16 +72,7 @@ export class DispatchTreeItem extends vscode.TreeItem {
  */
 export function registerApprovalCommands(context: vscode.ExtensionContext, bus: EventBus): void {
     context.subscriptions.push(
-        vscode.commands.registerCommand('mutsumi.approveRequest', (item: ApprovalTreeItem | DispatchTreeItem) => {
-            if (item instanceof DispatchTreeItem) {
-                bus.emitFtB('dispatch.respond', {
-                    sessionId: item.dispatch.parentId,
-                    requestId: item.dispatch.requestId,
-                    outcome: 'approve',
-                    origin: 'sidebar',
-                });
-                return;
-            }
+        vscode.commands.registerCommand('mutsumi.approveRequest', (item: ApprovalTreeItem) => {
             if (item?.record?.info.id) {
                 bus.emitFtB('approval.respond', {
                     sessionId: item.record.info.sessionId,
@@ -119,16 +85,7 @@ export function registerApprovalCommands(context: vscode.ExtensionContext, bus: 
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('mutsumi.rejectRequest', async (item: ApprovalTreeItem | DispatchTreeItem) => {
-            if (item instanceof DispatchTreeItem) {
-                bus.emitFtB('dispatch.respond', {
-                    sessionId: item.dispatch.parentId,
-                    requestId: item.dispatch.requestId,
-                    outcome: 'reject',
-                    origin: 'sidebar',
-                });
-                return;
-            }
+        vscode.commands.registerCommand('mutsumi.rejectRequest', async (item: ApprovalTreeItem) => {
             if (!item?.record?.info.id) {
                 return;
             }

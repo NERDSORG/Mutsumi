@@ -169,7 +169,6 @@
   "chat.reject": "拒绝",
   "chat.rejectWithReason": "附理由拒绝",
   "chat.rejectReasonPlaceholder": "理由（留空 = 终止会话）",
-  "chat.dispatchTitle": "派发 {0} 个子 Agent",
   "chat.sessionDeleted": "该会话已被删除。",
   "chat.debugResultTitle": "完整 LLM 上下文",
   "chat.close": "关闭",

@@ -3,7 +3,7 @@
  *
  * Holds the panel's mutable state, applies BtF facts to it, and renders the
  * message flow (right-aligned user bubbles + full-width agent turns with live
- * incremental rendering), approval/dispatch cards, the context panel and the
+ * incremental rendering), approval cards, the context panel and the
  * input area. Frontends never listen to FtB; every state change arrives as a
  * BtF fact.
  *
@@ -21,7 +21,6 @@ import type { StateDrivenPopup } from './popup';
 import type {
     ApprovalRequestInfo,
     ChatState,
-    DispatchCardData,
     RenderData,
     SessionSnapshot,
     UiContext,
@@ -67,7 +66,6 @@ export class App {
             contextPanel: null,
             availableModels: {},
             approvals: [],
-            dispatches: [],
             pendingSends: [],
             deleted: false,
         };
@@ -169,17 +167,6 @@ export class App {
                     this.renderApprovals();
                 }
                 break;
-            case 'dispatch.requested':
-                if (!this.state.dispatches.some(d => d.requestId === payload.requestId)) {
-                    this.state.dispatches.push({ requestId: payload.requestId, children: payload.children });
-                    this.renderApprovals();
-                    this.scrollToBottom();
-                }
-                break;
-            case 'dispatch.resolved':
-                this.state.dispatches = this.state.dispatches.filter(d => d.requestId !== payload.requestId);
-                this.renderApprovals();
-                break;
             case 'context.debugResult':
                 this.showDebugOverlay(payload.formatted);
                 break;
@@ -204,10 +191,6 @@ export class App {
         this.state.contextPanel = snapshot.contextPanel;
         this.state.availableModels = snapshot.availableModels;
         this.state.approvals = [...snapshot.pendingApprovals];
-        this.state.dispatches = snapshot.pendingDispatches.map(d => ({
-            requestId: d.requestId,
-            children: d.children,
-        }));
         this.state.pendingSends = [];
         this.state.deleted = false;
 
@@ -339,9 +322,6 @@ export class App {
 
     private renderApprovals(): void {
         this.approvalsEl.innerHTML = '';
-        for (const dispatch of this.state.dispatches) {
-            this.approvalsEl.appendChild(this.buildDispatchCard(dispatch));
-        }
         for (const request of this.state.approvals) {
             this.approvalsEl.appendChild(this.buildApprovalCard(request));
         }
@@ -444,55 +424,6 @@ export class App {
                 reasonInput.focus();
             }
         });
-
-        return card;
-    }
-
-    private buildDispatchCard(dispatch: DispatchCardData): HTMLElement {
-        const card = document.createElement('div');
-        card.className = 'mutsumi-approval-card mutsumi-dispatch-card';
-
-        const title = document.createElement('div');
-        title.className = 'mutsumi-approval-title';
-        title.textContent = `🍴 ${this.ctx.label('chat.dispatchTitle').replace('{0}', String(dispatch.children.length))}`;
-        card.appendChild(title);
-
-        const list = document.createElement('ul');
-        list.className = 'mutsumi-dispatch-list';
-        for (const child of dispatch.children) {
-            const item = document.createElement('li');
-            item.textContent = `[${child.agentType}] ${child.prompt.slice(0, 200)}`;
-            list.appendChild(item);
-        }
-        card.appendChild(list);
-
-        const buttons = document.createElement('div');
-        buttons.className = 'mutsumi-approval-buttons';
-        const approveBtn = document.createElement('button');
-        approveBtn.type = 'button';
-        approveBtn.className = 'mutsumi-approve-button';
-        approveBtn.textContent = this.ctx.label('chat.approve');
-        approveBtn.addEventListener('click', () => {
-            this.ctx.sendFtB('dispatch.respond', {
-                requestId: dispatch.requestId,
-                outcome: 'approve',
-                origin: 'webview',
-            });
-        });
-        const rejectBtn = document.createElement('button');
-        rejectBtn.type = 'button';
-        rejectBtn.className = 'mutsumi-reject-button';
-        rejectBtn.textContent = this.ctx.label('chat.reject');
-        rejectBtn.addEventListener('click', () => {
-            this.ctx.sendFtB('dispatch.respond', {
-                requestId: dispatch.requestId,
-                outcome: 'reject',
-                origin: 'webview',
-            });
-        });
-        buttons.appendChild(approveBtn);
-        buttons.appendChild(rejectBtn);
-        card.appendChild(buttons);
 
         return card;
     }

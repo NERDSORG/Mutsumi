@@ -2,7 +2,7 @@
  * @fileoverview Agent module type definitions for the Mutsumi VSCode extension.
  * @module agent/types
  * @description Type aliases, constants, and functions. Pure interfaces
- * (AgentRunOptions, DispatchSession, StreamGenerateOptions/Result,
+ * (AgentRunOptions, StreamGenerateOptions/Result,
  * RoundSnapshot, ToolExecutorCallbacks/Result, TitleGeneratorConfig,
  * GenerateTitleConfig) live in `agent/interfaces.ts`.
  */

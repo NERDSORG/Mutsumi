@@ -257,7 +257,8 @@
 │  ┌─────────────────────────────────────────────────────┐        │
 │  │              AgentBackend（单例）                     │        │
 │  │  AgentRegistry │ ApprovalRequestManager │            │        │
-│  │  DispatchSessionManager │ TitleGenerator │           │        │
+│  │  TitleGenerator │ （无 DispatchSessionManager：       │        │
+│  │  派发是工具内部逻辑，结果经 steer 回报）              │        │
 │  └────────┬──────────────────────────────┬─────────────┘        │
 │           │ 每会话                        │ 每次 run              │
 │  ┌────────▼─────────┐          ┌─────────▼──────────┐          │
@@ -343,7 +344,6 @@ class EventBus {
 | `context.toggleSkill` | `skill`, `active` | 同上 |
 | `context.setMcpTools` | `selection: McpToolSelection[]` | 同上 |
 | `approval.respond` | `requestId`, `outcome: 'approve'\|'reject'\|'custom'`, `reason?`, `origin?` | 拒绝理由随载荷携带；`origin` 由适配器桥接时注入 |
-| `dispatch.respond` | `requestId`, `outcome: 'approve'\|'reject'`, `origin?` | 子 Agent 启动审批；reject → **删除子会话文件** |
 | `settings.setAutoApprove` | `enabled` | 全局开关（写 VSCode 配置） |
 
 ### 5.3 BtF 事件目录（后端 → 前端，所有前端订阅）
@@ -360,8 +360,6 @@ class EventBus {
 | `session.error` | `sessionId`, `message`, `recoverable` | 通知微前端订阅它弹原生通知 |
 | `approval.requested` | `sessionId`, `request: ApprovalRequestInfo` | 挂起直到某前端 respond |
 | `approval.resolved` | `sessionId`, `requestId`, `outcome`, `reason?`, `origin?` | 其余前端立即撤下卡片 |
-| `dispatch.requested` | `sessionId`（父）, `requestId`, `children: { sessionId, prompt, agentType, allowedUris }[]` | 子 Agent 启动审批 |
-| `dispatch.resolved` | `sessionId`, `requestId`, `outcome`, `origin?` | |
 | `context.debugResult` | `sessionId`, `formatted` | `context.debug` 的回执 |
 | `sessions.changed` | — | 会话树/列表变化，侧栏刷新 |
 | `settings.autoApprove` | `enabled` | 全局开关回播 |
@@ -503,13 +501,13 @@ for text of steered:
   - 拒绝：`reason` 为空 → 调 `signalTermination(false)` 并返回 `[Rejected] ...`；非空 → `[Rejected with Reason] ...`。语义同旧 `handleRejectionFlow`，**但没有输入框**。
   - abort 时取消该会话的 pending 请求并返回 `[Cancelled] ...`（ACP 规范同样要求取消时以 cancelled 了结）。
   - 保留 pending 列表 + `onDidChangeRequests` 发射器供侧栏审批树订阅。
-- **`dispatchManager.ts`**（`DispatchSessionManager` 迁入 + orchestrator 派发逻辑）：
-  1. 校验子类型（`AgentTypeRegistry.isValidChildType`）；
-  2. 每个子 Agent：`AgentRegistry.createAgent({ parentId, prompt: context_broadcast+prompt, ... })`——**文件立即落盘**；
-  3. 广播 `dispatch.requested`（父 sessionId + requestId + children 清单），挂起等 `dispatch.respond`；
-  4. approve → 对每个子会话 `enqueueUserMessage(prompt, 'queue')`，**后端直接后台开跑**（不再有 "please run them manually"）；reject → **删除子会话文件**，dispatch 报告记"被拒绝"；
-  5. 子 Agent `task_finish` → `reportTaskFinished` → 现有聚合逻辑 → 报告作为工具结果返回。
-  - 子会话是一等会话：它的 `session.created/status/output` 照常广播，任何前端可打开它的 .mtm 实时围观。
+- **派发与跨会话通信（无 `dispatchManager.ts`；派发是工具内部逻辑）**：
+  1. `dispatch_subagents` 工具：校验子类型 → `session.requestApproval`（**普通工具审批，先于创建**；尊重自动批准与预执行平面）→ 拒绝则不创建任何文件、工具立即返回（空理由终止会话 / 带理由反馈模型）；
+  2. 批准 → 预生成全部子 UUID → 每个子 Agent `AgentRegistry.createAgent`（文件落盘，prompt 含身份块：自己/母/同事的 UUID）→ 各自立即后台开跑；
+  3. 工具**立即 resolve**，返回全部子 Agent 的 UUID 清单；**不等待、无等待池、无聚合**——汇总由父 Agent 自己用模型能力做；
+  4. 结果回收复用 steer：子 `task_finish` → 向父会话注入一条带发送者身份的 user 消息（运行中 → 轮次边界注入；停着 → 唤醒开新轮；已删除 → 丢弃）。子会话被删除 → 同样注入一条"已删除（取消）"通知；
+  5. `task_finish` = 向母汇报 + 标记自己完成，**可多次调用**（用户可直接与子 Agent 对话并要求它再次汇报）；`communicate` 工具（免审批）= 任意两会话间投递：`{ target_session_id, message }`，与 `task_finish` 共享同一个投递原语；
+  6. 子会话是一等会话：`session.created/status/output` 照常广播，任何前端可打开它的 .mtm 实时围观。
 - **`titleGenerator.ts`**（沿用名字，去 notebook 化）：首轮用户消息完成后触发。内部建 **ephemeral `BackendSession`（`fileUri = null`）** + `createEmptyToolSet()` + `maxLoops: 1` 的 runner。ephemeral 会话照常发事件（无人订阅，零成本）。生成后走 `session.rename` 同一条路径（改 metadata → 改文件名 → 广播 `session.metadata` + `sessions.changed`）。
 - **`snapshot.ts`**：历史 → §5.5 快照。原 `serializer.ts` 的 `buildInteractionRenderBlocks`（把一组 assistant/tool 消息渲染成 RenderBlock[]，含 pretty-print 与渲染配置查询）**迁移到这里**。这是快照构建中必须在宿主做的部分（依赖 ToolManager/MCP 注册表）。
 
@@ -761,13 +759,14 @@ class AdapterRegistry {
 | idle 时发送 | 立即 `assembleUserMessage` → `appendMessage` → `userMessageCommitted` → 开跑 |
 | running 时发送（queue） | 入队，排队条可见；自然停止后依次处理 |
 | running 时发送（steer） | 入队；**下一轮次边界**（工具批次结束、下次 LLM 调用前）注入到 tool result 之后；若本轮自然停止则按 queue 处理 |
-| `run.interrupt` | abort → 修尾 → 落盘 → 清空队列 → `session.status('idle','interrupted')` |
+| `run.interrupt` | abort → 修尾 → 落盘 → 清空队列 → **级联打断所有已物化后代会话** → `session.status('idle','interrupted')` |
 | `history.truncate(i)` | 运行中先 interrupt → 截到 i 之前 → 修尾 → 落盘 → 清队 → 广播新 `session.state` |
 | 重试（用户消息菜单） | truncate(该条索引) + userMessage.send(该条文本) |
 | 撤回（用户消息菜单） | truncate + 文本填回输入框（不发送） |
 | 继续（Agent 消息菜单） | `userMessage.send('继续')` |
 | 关闭面板 | `session.close`；后端照跑；重开 `session.open` → 快照水合 |
-| 子 Agent 派发 | 建文件 → `dispatch.requested` → approve 则后台开跑 / reject 则删文件 → 聚合报告 |
+| 子 Agent 派发 | 工具审批（先于创建）→ 批准才建文件并后台开跑 → 工具立即返回 UUID 清单；子 `task_finish`/被删除 → steer 通知父会话 |
+| 跨会话通信 | `communicate`（免审批）：目标运行中 → 轮次边界注入；停着 → 唤醒开新轮；已删除 → 调用方收到错误 |
 | 工具审批 | `approval.requested` 广播 → 任一前端首个 `approval.respond` 定案 → `approval.resolved` 广播 → 事务/工具继续 |
 | edit/write 审批 | 默认不弹 diff；custom action 打开 diff；结算时事务自闭环（关窗、清理、覆写、反馈 diff） |
 | 改名/模型/effort/rules/skills/MCP | FtB → 改 metadata → 落盘 → `session.metadata` 广播 |
@@ -819,13 +818,15 @@ class AdapterRegistry {
 1. 用户气泡右对齐、Agent 消息全宽（Kimi 网页式）。
 2. `newAgent` 保留命令 + 原生 QuickPick，内部走新后端事件。
 3. 会话在内存中不淘汰。
-4. 撤回/重试/打断均清空该会话排队。
-5. 子 Agent 审批被拒 → 删除子会话文件。
+4. 撤回/重试/打断均清空该会话排队；打断级联到所有已物化后代会话（紧急制动）；删除会话不级联（删除是管理操作）。
+5. 派发审批先于创建（拒绝即不创建任何文件）；批准后工具立即返回（不等子 Agent），结果经 task_finish/删除通知以 steer 消息回报父会话。
 6. 水合用快照，不做逐事件回放。
 7. edit/write 默认不弹 DiffEditor，按钮触发；`customAction.localOnly` 标记本地专属动作。
 8. 无"无交互前端审批策略"——侧栏审批树是常驻兜底前端；Lite 自动应答自己的会话。
 9. ACP 本轮不实现；传输形态届时按真实客户端定。
 10. 压缩功能本轮整体删除，仅留 §14 的回归挂钩。
+11. 跨会话消息不区分"怎么停下来的"：停着的会话收到消息一律唤醒；紧急制动丢弃的是刹车时在队列里的通知。
+12. 子 Agent 可多次 task_finish 汇报（用户可直接与子 Agent 对话并要求再报一次）。
 
 ---
 

@@ -20,6 +20,7 @@ import {
 	dispatchSubagentsTool,
 	taskFinishTool,
 	getAgentTypesTool,
+	communicateTool,
 } from "./tools/agent_control";
 import { projectOutlineTool } from "./tools/project_outline";
 import { getWarningErrorTool } from "./tools/diagnostics";
@@ -235,6 +236,7 @@ export class ToolRegistry {
 		dispatch_subagents: dispatchSubagentsTool,
 		task_finish: taskFinishTool,
 		get_agent_types: getAgentTypesTool,
+		communicate: communicateTool,
 		query_codebase: queryCodebaseTool,
 	};
 
@@ -268,6 +270,7 @@ export class ToolRegistry {
 			killShellTaskTool,
 			dispatchSubagentsTool,
 			getAgentTypesTool,
+			communicateTool,
 		];
 
 		// Only add RAG tool if embedding endpoint is configured

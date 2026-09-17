@@ -36,7 +36,6 @@ import { debugLogger } from '../debugLogger';
 import type { EventBus } from './eventBus';
 import type { SessionStore } from './sessionStore';
 import type { ApprovalRequestManager } from './approvalManager';
-import type { DispatchSessionManager } from './dispatchManager';
 import type { AgentRegistry } from './agentRegistry';
 import type {
     ApprovalRequestInit,
@@ -283,17 +282,43 @@ export class BackendSession {
         }
     }
 
-    /** Hard-stop the current run, clear the queue, repair and persist. */
+    /**
+     * Hard-stop the current run, clear the queue, repair and persist.
+     * Interrupt cascades to every materialized descendant session (an
+     * interrupt is an emergency brake for the whole agent tree).
+     */
     async interrupt(): Promise<void> {
+        await this.interruptTree(new Set());
+    }
+
+    private async interruptTree(visited: Set<string>): Promise<void> {
+        if (visited.has(this.sessionId)) {
+            return;
+        }
+        visited.add(this.sessionId);
+
         this.queue = [];
         this.deps.approvals.cancelSessionRequests(this.sessionId);
+
+        // Cascade to materialized descendants (cold descendants have no run
+        // to stop; recursion covers deeper levels).
+        const entry = this.deps.registry.get(this.sessionId);
+        const childInterrupts: Promise<void>[] = [];
+        for (const childId of entry?.childIds ?? []) {
+            const child = this.deps.getMaterializedSession(childId);
+            if (child) {
+                childInterrupts.push(child.interruptTree(visited));
+            }
+        }
+
         if (this.currentAbort) {
             this.currentAbort.abort();
             // Wait for the in-flight turn to settle (its finally-block repairs
             // the tail, persists and broadcasts the idle/interrupted status).
-            await this.drainPromise;
+            await Promise.all([this.drainPromise, ...childInterrupts]);
             return;
         }
+        await Promise.all(childInterrupts);
         this.emitStatus('interrupted');
     }
 
@@ -311,6 +336,15 @@ export class BackendSession {
         this.repairDanglingToolCalls();
         this.currentTurnRenderData = null;
         await this.persist();
+    }
+
+    /** Repair dangling tool calls found after loading (crash residue). */
+    async repairLoadedHistory(): Promise<void> {
+        const before = this.history.length;
+        this.repairDanglingToolCalls();
+        if (this.history.length !== before) {
+            await this.persist();
+        }
     }
 
     /**
@@ -488,12 +522,38 @@ export class BackendSession {
     }
 
     /**
-     * task_finish entry point: mark finished and feed the dispatch
-     * aggregation (no-op aggregation for root agents).
+     * task_finish entry point: mark finished and report to the parent session
+     * (a steered agent message). May be called multiple times — the user can
+     * talk to a finished sub-agent and have it report again.
      */
     async reportTaskFinished(summary: string): Promise<void> {
         await this.markTaskFinished();
-        this.deps.dispatches.reportTaskFinished(this.sessionId, summary);
+        const parentId = this.metadata.parent_agent_id;
+        if (!parentId) {
+            return;
+        }
+        const text = `[Agent Message — from '${this.metadata.name}' (${this.sessionId})]\n\nTask finished. Final report:\n\n${summary}`;
+        await this.deliverAgentMessage(parentId, text);
+    }
+
+    /**
+     * Deliver an agent message to another session. The message lands as a
+     * steered user message: injected at the next round boundary while the
+     * target is running, or wakes the target (a new turn) when it is stopped
+     * — regardless of how it stopped. Returns a status string for the
+     * calling tool.
+     */
+    async deliverAgentMessage(targetUuid: string, text: string): Promise<string> {
+        const targetEntry = this.deps.registry.get(targetUuid);
+        if (!targetEntry) {
+            return `Error: target session '${targetUuid}' not found (deleted?).`;
+        }
+        const target = await this.deps.materializeSession(targetUuid);
+        const wasRunning = target.status === 'running';
+        target.enqueueUserMessage(text, 'steer');
+        return wasRunning
+            ? `Message delivered to agent '${targetEntry.name}'; it will see it at the next round boundary.`
+            : `Message delivered to agent '${targetEntry.name}'; it will wake up and process it.`;
     }
 
     // ------------------------------------------------------------------
@@ -566,7 +626,7 @@ export class BackendSession {
 
     /** Broadcast a fresh `session.state` snapshot (after truncate/prune, or on open). */
     async broadcastSnapshot(): Promise<void> {
-        const snapshot = await buildSessionSnapshot(this, this.deps.approvals, this.deps.dispatches);
+        const snapshot = await buildSessionSnapshot(this, this.deps.approvals);
         this.deps.bus.emitBtF('session.state', snapshot);
     }
 
@@ -637,13 +697,62 @@ export class BackendSession {
         }
     }
 
-    /** dispatch_subagents entry point (parent side). */
-    requestDispatch(
+    /**
+     * dispatch_subagents entry point (parent side; called after approval).
+     * Creates and immediately starts every child in the background, then
+     * resolves right away with the children manifest — children report back
+     * via task_finish, which lands as steered agent messages.
+     */
+    async requestDispatch(
         contextBroadcast: string,
         subAgents: DispatchRequestItem[],
-        signal?: AbortSignal,
     ): Promise<string> {
-        return this.deps.dispatches.requestDispatch(this, contextBroadcast, subAgents, signal);
+        // Pre-generate uuids so every child's prompt carries the full identity
+        // block (own id, parent id, sibling ids).
+        const planned = subAgents.map(sub => ({
+            sub,
+            uuid: uuidv4(),
+            agentType: sub.agent_type || 'implementer',
+        }));
+
+        const siblingList = planned.map(p => `${p.uuid} (${p.agentType})`).join(', ');
+        const children: { session: BackendSession; prompt: string }[] = [];
+        for (const { sub, uuid, agentType } of planned) {
+            const taskPrompt = contextBroadcast
+                ? `## Context Summary\n\n${contextBroadcast}\n\n---\n\n${sub.prompt}`
+                : sub.prompt;
+            const identityBlock = [
+                '## Agent Identity',
+                `- Your session id: ${uuid}`,
+                `- Your parent agent session id: ${this.sessionId}`,
+                `- Sibling agents from this dispatch: ${siblingList}`,
+                'Use the `communicate` tool to message any of them by session id. Use `task_finish` to report completion to your parent.',
+            ].join('\n');
+            const fullPrompt = `${taskPrompt}\n\n${identityBlock}`;
+            const child = await this.deps.registry.createAgent({
+                agentType,
+                prompt: fullPrompt,
+                allowedUris: sub.allowed_uris,
+                modelSelection: sub.modelSelection,
+                parentId: this.sessionId,
+                uuid,
+            });
+            children.push({ session: child, prompt: fullPrompt });
+        }
+
+        for (const child of children) {
+            child.session.enqueueUserMessage(child.prompt, 'queue');
+        }
+
+        const manifest = children
+            .map(c => `- '${c.session.metadata.name}' (${c.session.sessionId})`)
+            .join('\n');
+        return [
+            `Created and started ${children.length} sub-agent(s):`,
+            manifest,
+            '',
+            'They are now running in the background. Each one reports back when it finishes; completion reports arrive as user messages. Continue your own work or end your turn to wait for them.',
+        ].join('\n');
     }
 
     // ------------------------------------------------------------------
