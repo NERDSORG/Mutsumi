@@ -71,7 +71,7 @@ export const DEFAULT_MODEL_SELECTION: ModelSelection = {
 };
 
 /**
- * Metadata for an agent session stored in notebook metadata.
+ * Metadata for an agent session, persisted in the .mtm file.
  * @interface AgentMetadata
  */
 export interface McpToolSelection {
@@ -109,7 +109,7 @@ export interface AgentMetadata {
     /** Frozen selection of MCP tools enabled for this session. */
     enabledMcpTools?: McpToolSelection[];
 
-    /** Format version marker written by the serializer for future .mtm migrators; never read at runtime */
+    /** Format version marker for future .mtm migrators; never read at runtime */
     mtm_version?: number;
 
     /** List of sub-agent UUIDs created by this agent */
@@ -189,9 +189,9 @@ export interface AgentStateInfo {
     name: string;
     /** File URI string where the agent is stored */
     fileUri: string;
-    
-    /** Whether the notebook window is currently open */
-    isWindowOpen: boolean;
+
+    /** Number of frontends (panels, ACP connections) currently displaying this session */
+    openClientCount: number;
     /** Whether the agent is currently running */
     isRunning: boolean;
     /** Whether the agent task has finished */

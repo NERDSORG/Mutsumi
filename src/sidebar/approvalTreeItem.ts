@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import { ApprovalRequest, approvalManager } from '../tools.d/permission';
 import { t } from '../i18n';
+import type { ApprovalRequestRecord, PendingDispatchInfo } from '../backend/interfaces';
+import type { EventBus } from '../backend/eventBus';
 
 /**
  * @description Approval request tree node item for displaying tool call approval requests in the sidebar
@@ -10,77 +11,52 @@ import { t } from '../i18n';
 export class ApprovalTreeItem extends vscode.TreeItem {
     /**
      * @description Creates a new approval request tree node item
-     * @param {ApprovalRequest} request - Approval request data object
+     * @param {ApprovalRequestRecord} record - Approval request record from the backend
      */
     constructor(
-        public readonly request: ApprovalRequest
+        public readonly record: ApprovalRequestRecord
     ) {
-        super(request.actionDescription, vscode.TreeItemCollapsibleState.None);
-        
-        this.description = this.formatTime(request.timestamp);
+        super(record.info.actionDescription, vscode.TreeItemCollapsibleState.None);
+
+        this.description = new Date(record.info.timestamp).toLocaleTimeString();
         this.tooltip = this.buildTooltip();
         this.iconPath = this.getIcon();
-        
-        /**
-         * Sets contextValue based on request status and custom action capability.
-         * pendingApproval: show approve/reject buttons
-         * pendingApprovalWithCustom: show approve/reject AND custom action button
-         * resolvedApproval: only show view options
-         */
-        if (request.status === 'pending') {
-            this.contextValue = request.customAction ? 'pendingApprovalWithCustom' : 'pendingApproval';
+
+        if (record.status === 'pending') {
+            this.contextValue = record.info.customAction ? 'pendingApprovalWithCustom' : 'pendingApproval';
         } else {
             this.contextValue = 'resolvedApproval';
         }
     }
 
-    /**
-     * @description Formats date to localized time string
-     * @private
-     */
-    private formatTime(date: Date): string {
-        return date.toLocaleTimeString();
-    }
-
-    /**
-     * @description Builds Markdown tooltip displayed on mouse hover
-     * @private
-     */
     private buildTooltip(): vscode.MarkdownString {
+        const info = this.record.info;
         const md = new vscode.MarkdownString();
-        md.appendMarkdown(`**${this.request.actionDescription}**\n\n`);
-        md.appendMarkdown(t('approval.target', this.request.targetUri) + `\n\n`);
-        
-        if (this.request.customAction) {
-             md.appendMarkdown(t('approval.customActionAvailable', this.request.customAction.label) + `\n\n`);
+        md.appendMarkdown(`**${info.actionDescription}**\n\n`);
+        md.appendMarkdown(t('approval.target', info.targetUri) + `\n\n`);
+
+        if (info.customAction) {
+             md.appendMarkdown(t('approval.customActionAvailable', info.customAction.label) + `\n\n`);
         }
 
-        if (this.request.details) {
-            md.appendMarkdown(t('approval.details', this.request.details));
+        if (info.details) {
+            md.appendMarkdown(t('approval.details', info.details));
         }
-        md.appendMarkdown(t('approval.time', this.request.timestamp.toLocaleString()) + `\n\n`);
+        md.appendMarkdown(t('approval.time', new Date(info.timestamp).toLocaleString()) + `\n\n`);
         md.appendMarkdown(t('approval.status', this.getStatusText()));
         return md;
     }
 
-    /**
-     * @description Gets corresponding status text based on request status
-     * @private
-     */
     private getStatusText(): string {
-        switch (this.request.status) {
+        switch (this.record.status) {
             case 'pending': return t('approval.pending');
             case 'approved': return t('approval.approved');
             case 'rejected': return t('approval.rejected');
         }
     }
 
-    /**
-     * @description Gets corresponding icon based on request status
-     * @private
-     */
     private getIcon(): vscode.ThemeIcon {
-        switch (this.request.status) {
+        switch (this.record.status) {
             case 'pending': return new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.yellow'));
             case 'approved': return new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
             case 'rejected': return new vscode.ThemeIcon('x', new vscode.ThemeColor('charts.red'));
@@ -89,33 +65,99 @@ export class ApprovalTreeItem extends vscode.TreeItem {
 }
 
 /**
- * @description Registers approval-related commands to the VSCode extension context
- * @param {vscode.ExtensionContext} context - Extension context for registering subscriptions
+ * @description Dispatch approval tree node: a parent agent asks to start sub-agents.
  */
-export function registerApprovalCommands(context: vscode.ExtensionContext): void {
-    // Register approve request command
+export class DispatchTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly dispatch: PendingDispatchInfo
+    ) {
+        super(
+            t('approval.dispatch.action', dispatch.children.length),
+            vscode.TreeItemCollapsibleState.None
+        );
+
+        this.description = new Date().toLocaleTimeString();
+        this.iconPath = new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.yellow'));
+        this.contextValue = 'pendingDispatch';
+
+        const md = new vscode.MarkdownString();
+        md.appendMarkdown(`**${t('approval.dispatch.action', dispatch.children.length)}**\n\n`);
+        for (const child of dispatch.children) {
+            md.appendMarkdown(`- \`${child.agentType}\`: ${child.prompt.slice(0, 200)}\n`);
+        }
+        this.tooltip = md;
+    }
+}
+
+/**
+ * @description Registers approval-related commands. Buttons emit FtB events;
+ * the backend settles the request and broadcasts the fact.
+ * @param {vscode.ExtensionContext} context - Extension context for registering disposables
+ * @param {EventBus} bus - The backend event bus
+ */
+export function registerApprovalCommands(context: vscode.ExtensionContext, bus: EventBus): void {
     context.subscriptions.push(
-        vscode.commands.registerCommand('mutsumi.approveRequest', (item: any) => {
-            if (item && item.request && item.request.id) {
-                approvalManager.approveRequest(item.request.id);
+        vscode.commands.registerCommand('mutsumi.approveRequest', (item: ApprovalTreeItem | DispatchTreeItem) => {
+            if (item instanceof DispatchTreeItem) {
+                bus.emitFtB('dispatch.respond', {
+                    sessionId: item.dispatch.parentId,
+                    requestId: item.dispatch.requestId,
+                    outcome: 'approve',
+                    origin: 'sidebar',
+                });
+                return;
+            }
+            if (item?.record?.info.id) {
+                bus.emitFtB('approval.respond', {
+                    sessionId: item.record.info.sessionId,
+                    requestId: item.record.info.id,
+                    outcome: 'approve',
+                    origin: 'sidebar',
+                });
             }
         })
     );
 
-    // Register reject request command
     context.subscriptions.push(
-        vscode.commands.registerCommand('mutsumi.rejectRequest', (item: any) => {
-            if (item && item.request && item.request.id) {
-                approvalManager.rejectRequest(item.request.id);
+        vscode.commands.registerCommand('mutsumi.rejectRequest', async (item: ApprovalTreeItem | DispatchTreeItem) => {
+            if (item instanceof DispatchTreeItem) {
+                bus.emitFtB('dispatch.respond', {
+                    sessionId: item.dispatch.parentId,
+                    requestId: item.dispatch.requestId,
+                    outcome: 'reject',
+                    origin: 'sidebar',
+                });
+                return;
             }
+            if (!item?.record?.info.id) {
+                return;
+            }
+            // Rejection reason is collected here (frontend) and carried by the
+            // FtB payload; empty or cancelled input rejects without a reason,
+            // which terminates the session (backend semantics).
+            const reason = await vscode.window.showInputBox({
+                prompt: t('permission.rejectPrompt', item.record.info.toolName),
+                placeHolder: t('permission.rejectPlaceHolder'),
+            });
+            bus.emitFtB('approval.respond', {
+                sessionId: item.record.info.sessionId,
+                requestId: item.record.info.id,
+                outcome: 'reject',
+                reason: reason ?? undefined,
+                origin: 'sidebar',
+            });
         })
     );
 
-    // Register custom request action command
     context.subscriptions.push(
-        vscode.commands.registerCommand('mutsumi.customRequestAction', (item: any) => {
-            if (item && item.request && item.request.id) {
-                approvalManager.handleCustomAction(item.request.id);
+        vscode.commands.registerCommand('mutsumi.customRequestAction', (item: ApprovalTreeItem) => {
+            if (item?.record?.info.id) {
+                bus.emitFtB('approval.respond', {
+                    sessionId: item.record.info.sessionId,
+                    requestId: item.record.info.id,
+                    outcome: 'custom',
+                    origin: 'sidebar',
+                });
             }
         })
     );

@@ -6,7 +6,8 @@
         "noEmit": true
     },
     "include": [
-        "src/notebook/renderer.ts"
+        "src/frontends/webview/ui/**/*.ts",
+        "types/**/*.d.ts"
     ],
     "exclude": [
         "node_modules"

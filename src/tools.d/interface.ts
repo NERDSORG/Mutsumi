@@ -1,20 +1,14 @@
-import type * as vscode from 'vscode';
 import type { Tool } from '@moonshot-ai/kosong';
-import type { IAgentSession } from '../adapters/interfaces';
+import type { BackendSession } from '../backend/backendSession';
 import type { ToolSession } from './toolSession';
 
 export interface ToolContext {
     allowedUris: string[];
-    /** @deprecated Use `session` instead. Will be removed in future versions. */
-    notebook?: vscode.NotebookDocument;
-    /** @deprecated Use `session` instead. Will be removed in future versions. */
-    execution?: vscode.NotebookCellExecution;
-    session: IAgentSession;
+    session: BackendSession;
     /** Per-tool-call execution session; abort this to stop a running tool. */
     toolSession: ToolSession;
     /** Convenience: alias of `toolSession.abortSignal`. */
     abortSignal?: AbortSignal;
-    appendOutput?: (content: string) => Promise<void>;
     /**
      * Signal that the session should be terminated after this tool call.
      * The tool result will be added to the conversation before termination.

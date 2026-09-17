@@ -102,14 +102,13 @@ export class AgentTreeItem extends vscode.TreeItem {
  * registerAgentCommands(context);
  */
 export function registerAgentCommands(context: vscode.ExtensionContext): void {
-    // Open agent file command
+    // Open agent file command: opens the session in the Mutsumi chat editor
     context.subscriptions.push(
         vscode.commands.registerCommand('mutsumi.openAgentFile', async (item: AgentTreeItem) => {
             if (item && item.agentData && item.agentData.fileUri) {
                 const uri = vscode.Uri.parse(item.agentData.fileUri);
                 try {
-                    const doc = await vscode.workspace.openNotebookDocument(uri);
-                    await vscode.window.showNotebookDocument(doc, {
+                    await vscode.commands.executeCommand('vscode.openWith', uri, 'mutsumi.chat', {
                         viewColumn: vscode.ViewColumn.Active,
                         preserveFocus: false,
                         preview: false

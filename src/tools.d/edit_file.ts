@@ -4,13 +4,6 @@ import * as Diff from "diff";
 import { v4 as uuidv4 } from "uuid";
 import type { ToolContext } from "./interface";
 import { resolveUri, checkAccess, getUriKey } from "./utils";
-import {
-	approvalManager,
-	isAutoApproveEnabled,
-	isInPreExecution,
-	handleRejectionFlow,
-} from "./permission";
-import { notifyApprovalNeeded } from "../notifications";
 import { t } from "../i18n";
 
 // ============================================================================
@@ -29,7 +22,6 @@ interface EditTransactionState {
 	backupUri: vscode.Uri;
 	editUri: vscode.Uri;
 	toolName: string;
-	signalTermination?: (isTaskComplete?: boolean) => void;
 	isNewFile?: boolean; // Whether the file is newly created
 }
 
@@ -92,9 +84,26 @@ class TempFileHandler {
 	}
 
 	/**
-	 * Read user-edited content from the editable temp file
+	 * Read user-edited content from the editable temp file.
+	 * Prefers the open editor buffer: the user may have edited the proposal in
+	 * the diff view without pressing Ctrl+S. A dirty buffer is saved first so
+	 * the on-disk temp file and the buffer stay consistent.
 	 */
 	async readUserContent(): Promise<string> {
+		const editUriString = this.editUri.toString();
+		const openDoc = vscode.workspace.textDocuments.find(
+			(doc) => doc.uri.toString() === editUriString,
+		);
+		if (openDoc) {
+			if (openDoc.isDirty) {
+				try {
+					await openDoc.save();
+				} catch {
+					// Fall through: the buffer text below still holds the edits.
+				}
+			}
+			return openDoc.getText();
+		}
 		const bytes = await vscode.workspace.fs.readFile(this.editUri);
 		return new TextDecoder().decode(bytes);
 	}
@@ -202,7 +211,6 @@ class EditTransaction {
 		resolve: (value: string) => void,
 		reject: (reason: any) => void,
 		isNewFile: boolean = false,
-		signalTermination?: (isTaskComplete?: boolean) => void,
 	) {
 		this.targetUri = targetUri;
 		this.isNewFile = isNewFile;
@@ -217,7 +225,6 @@ class EditTransaction {
 			backupUri: this.tempFileHandler.getBackupUri(),
 			editUri: this.tempFileHandler.getEditUri(),
 			toolName,
-			signalTermination,
 			isNewFile,
 		};
 	}
@@ -355,26 +362,34 @@ class EditTransaction {
 }
 
 // ============================================================================
-// EditService - Core service managing all edit transactions
+// EditTransactionManager - Core manager for all edit transactions
 // ============================================================================
 
-class EditService {
-	private static instance: EditService;
+/**
+ * Manages edit transactions (temp-file based propose → approve → apply flow).
+ * Approval goes through the session's backend approval path; the diff editor
+ * is only opened on demand via the approval's custom action ("view/edit
+ * diff"), never automatically.
+ */
+class EditTransactionManager {
+	private static instance: EditTransactionManager;
 	private transactions = new Map<string, EditTransaction>(); // Map<uriKey, EditTransaction>
 	private diffController = new DiffEditorController();
 	private initialized = false;
+	/** Session of the latest requestEdit call, used to cancel pending approvals. */
+	private activeSessionForCancellation?: ToolContext["session"];
 
 	private constructor() {}
 
-	public static getInstance(): EditService {
-		if (!EditService.instance) {
-			EditService.instance = new EditService();
+	public static getInstance(): EditTransactionManager {
+		if (!EditTransactionManager.instance) {
+			EditTransactionManager.instance = new EditTransactionManager();
 		}
-		return EditService.instance;
+		return EditTransactionManager.instance;
 	}
 
 	/**
-	 * Initialize the service and register commands
+	 * Initialize the manager
 	 */
 	initialize(): void {
 		if (this.initialized) {
@@ -402,65 +417,39 @@ class EditService {
 		const uriKey = getUriKey(uri);
 
 		// Cancel existing session for this file if any
+		this.activeSessionForCancellation = context.session;
 		await this.cancelExistingTransaction(uriKey);
 
 		// Check if file exists, create empty file if not
 		const isNewFile = await ensureFileExists(uri);
 
-		return new Promise<string>(async (resolve, reject) => {
+		return new Promise<string>((resolvePromise, rejectPromise) => {
 			const transaction = new EditTransaction(
 				uri,
 				toolName,
-				resolve,
-				reject,
+				resolvePromise,
+				rejectPromise,
 				isNewFile,
-				context.signalTermination,
 			);
 
-			try {
-				// Initialize temp files
-				await transaction.initialize(newContent);
+			void (async () => {
+				try {
+					// Initialize temp files
+					await transaction.initialize(newContent);
 
-				// Register transaction
-				this.transactions.set(uriKey, transaction);
+					// Register transaction
+					this.transactions.set(uriKey, transaction);
 
-				// Determine auto-approve status
-				const shouldAutoApprove =
-					isAutoApproveEnabled() || isInPreExecution();
-
-				// Open diff editor
-				if(! shouldAutoApprove)
-					await this.diffController.openDiff(uri, transaction.getEditUri());
-
-				// Register with Permission Manager
-				const requestId = approvalManager.createRequest(
-					`Edit File: ${path.basename(uri.path)}`,
-					uri.toString(),
-					{
-						onApprove: async () => {
-							try {
-								const feedbackMsg = await transaction.accept();
-								this.transactions.delete(uriKey);
-								transaction.resolve(feedbackMsg);
-								await transaction.cleanup(this.diffController);
-							} catch (e: any) {
-								this.transactions.delete(uriKey);
-								transaction.reject(e);
-								await transaction.cleanup(this.diffController);
-								throw e;
-							}
-						},
-						onReject: async () => {
-							const feedbackMsg = await handleRejectionFlow(
-								transaction.state.toolName,
-								transaction.state.signalTermination!,
-							);
-							this.transactions.delete(uriKey);
-							transaction.resolve(feedbackMsg);
-							await transaction.cleanup(this.diffController);
-						},
+					// Request approval through the session's backend path. The diff
+					// editor opens only when the user triggers the custom action.
+					const { requestId, promise } = context.session.requestApprovalWithAction({
+						toolName,
+						actionDescription: t("approval.edit.action", path.basename(uri.path)),
+						targetUri: uri.toString(),
+						details: t("approval.edit.details"),
 						customAction: {
 							label: t("approval.edit.customAction"),
+							localOnly: true,
 							handler: async () => {
 								try {
 									await this.diffController.openDiff(
@@ -474,32 +463,42 @@ class EditService {
 								}
 							},
 						},
-					},
-					t("approval.edit.details"),
-					shouldAutoApprove,
-				);
-
-				transaction.state.approvalRequestId = requestId;
-
-				// Handle cancellation (from LLM side / user aborting generation)
-				if (context.abortSignal) {
-					context.abortSignal.addEventListener("abort", () => {
-						this.handleCancellation(uriKey, requestId);
+						onApprove: () => transaction.accept(),
+						abortSignal: context.abortSignal,
 					});
-				}
 
-				// Native OS notification only when user action is required.
-				if (!shouldAutoApprove) {
-					notifyApprovalNeeded(
-						t("approval.edit.action", path.basename(uri.path)),
-					);
+					if (requestId) {
+						transaction.state.approvalRequestId = requestId;
+					}
+
+					const resolution = await promise;
+
+					this.transactions.delete(uriKey);
+					if (transaction.isResolved()) {
+						// Overridden by a newer transaction for the same file.
+						return;
+					}
+
+					if (resolution.kind === "approved") {
+						transaction.resolve(
+							typeof resolution.payload === "string"
+								? resolution.payload
+								: "User accepted the changes.",
+						);
+					} else {
+						transaction.resolve(
+							context.session.formatApprovalResolution(toolName, resolution) ??
+								`[Rejected] The ${toolName} operation was rejected by user.`,
+						);
+					}
+					await transaction.cleanup(this.diffController);
+				} catch (e) {
+					// Cleanup on error
+					this.transactions.delete(uriKey);
+					await transaction.cleanup(this.diffController);
+					rejectPromise(e);
 				}
-			} catch (e) {
-				// Cleanup on error
-				this.transactions.delete(uriKey);
-				await transaction.cleanup(this.diffController);
-				reject(e);
-			}
+			})();
 		});
 	}
 
@@ -512,7 +511,12 @@ class EditService {
 			return;
 		}
 		if (existingTx.state.approvalRequestId) {
-			await approvalManager.cancelRequest(existingTx.state.approvalRequestId);
+			// Resolves the still-pending approval as cancelled; its handler
+			// observes the transaction as already resolved and no-ops.
+			const session = this.activeSessionForCancellation;
+			if (session) {
+				session.cancelApproval(existingTx.state.approvalRequestId);
+			}
 		}
 		this.transactions.delete(uriKey);
 		existingTx.resolve(
@@ -520,32 +524,14 @@ class EditService {
 		);
 		await existingTx.cleanup(this.diffController);
 	}
-
-	/**
-	 * Handle transaction cancellation
-	 */
-	private async handleCancellation(
-		uriKey: string,
-		requestId: string,
-	): Promise<void> {
-		const transaction = this.transactions.get(uriKey);
-		if (transaction && !transaction.isResolved()) {
-			await approvalManager.cancelRequest(requestId);
-			this.transactions.delete(uriKey);
-			transaction.resolve(
-				`[Interrupted] The ${transaction.state.toolName} tool execution was forcibly stopped by the user.`,
-			);
-			await transaction.cleanup(this.diffController);
-		}
-	}
 }
 
 // ============================================================================
-// Legacy Exports - Compatibility Adapters
+// Entry points
 // ============================================================================
 
 export function activateEditSupport(_context: vscode.ExtensionContext): void {
-	EditService.getInstance().initialize();
+	EditTransactionManager.getInstance().initialize();
 }
 
 export async function handleEdit(
@@ -554,7 +540,7 @@ export async function handleEdit(
 	context: ToolContext,
 	toolName: string = "edit",
 ): Promise<string> {
-	return EditService.getInstance().requestEdit(
+	return EditTransactionManager.getInstance().requestEdit(
 		uriInput,
 		newContent,
 		context,

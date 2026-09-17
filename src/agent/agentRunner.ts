@@ -3,46 +3,39 @@
  * @module agent/agentRunner
  */
 
-import * as vscode from 'vscode';
 import { ToolSet } from '../tools.d/toolManager';
 import { AgentMessage } from '../types';
-import { createProvider, extractText, isAbortError } from '@moonshot-ai/kosong';
-import type { ChatProvider, Message, ProviderConfig } from '@moonshot-ai/kosong';
-import { UIRenderer } from './uiRenderer';
-import { MUTSUMI_AGENT_CHAT_MIME, RenderBlock } from '../notebook/renderTypes';
+import { createProvider, isAbortError } from '@moonshot-ai/kosong';
+import type { ChatProvider, ProviderConfig } from '@moonshot-ai/kosong';
+import { RenderDataBuilder } from './renderDataBuilder';
+import { RenderBlock } from '../shared/renderTypes';
 import { streamGenerate } from './generateStream';
 import type { StreamGenerateResult } from './interfaces';
 import { ToolExecutor } from './toolExecutor';
-import { TitleGenerator } from './titleGenerator';
-import { IAgentSession, AgentSessionConfig } from '../adapters/interfaces';
-import { LiteAgentSession } from '../adapters/liteAdapter';
+import type { BackendSession } from '../backend/backendSession';
+import { projectUserMessageToWire } from '../contextManagement/history';
 import { debugLogger } from '../debugLogger';
-import { getTitleModelSelection } from '../utils';
 import type { AgentRunOptions } from './interfaces';
-import { t } from '../i18n';
 
 /**
  * Executes the main agent loop for LLM interactions.
  * @description Manages the conversation flow with the LLM, handling streaming responses,
- * tool calls, and UI updates. Implements the core agent execution logic.
+ * tool calls, and render-IR publishing. The session (BackendSession) owns the
+ * history and render state; every produced message is appended immediately.
  * @class AgentRunner
  * @example
  * const runner = new AgentRunner(options, toolSet, session);
- * const newMessages = await runner.run(abortController, initialMessages);
+ * const newMessages = await runner.run(abortController, { systemPrompt, wireHistory });
  */
 export class AgentRunner {
     /** Maximum number of tool interaction loops */
     private maxLoops: number;
-    /** UI renderer for notebook output */
-    private uiRenderer: UIRenderer;
     /** kosong chat provider for API communication */
     private provider: ChatProvider;
     /** Tool executor for handling tool calls */
     private toolExecutor: ToolExecutor | undefined;
-    /** Title generator for notebook titles */
-    private titleGenerator: TitleGenerator;
-    /** Agent session for UI interactions */
-    private session: IAgentSession;
+    /** Agent session (owns history, queue and render state) */
+    private session: BackendSession;
     /** Tool set for this agent instance */
     private toolSet: ToolSet;
 
@@ -51,12 +44,12 @@ export class AgentRunner {
      * @constructor
      * @param {AgentRunOptions} options - Configuration options
      * @param {ToolSet} toolSet - Tool set for this agent instance
-     * @param {IAgentSession} session - The agent session
+     * @param {BackendSession} session - The agent session
      */
     constructor(
         private options: AgentRunOptions,
         toolSet: ToolSet,
-        session: IAgentSession
+        session: BackendSession
     ) {
         this.session = session;
         this.toolSet = toolSet;
@@ -89,94 +82,75 @@ export class AgentRunner {
         } else if (options.providerType === 'openai') {
             this.provider = this.provider.withThinking('off');
         }
-        this.uiRenderer = new UIRenderer();
-        // ToolExecutor will be initialized in run() after we can await getConfig()
-        this.titleGenerator = new TitleGenerator();
     }
 
     /**
      * Executes the main agent loop.
      * @description Runs the conversation loop with the LLM, handling streaming,
-     * tool calls, and termination conditions.
+     * tool calls, round-boundary steering injection, and termination conditions.
      * @param {AbortController} abortController - Controller for cancellation
-     * @param {AgentMessage[]} initialMessages - Initial message history
-     * @returns {Promise<AgentMessage[]>} New messages generated during this run
-     * @throws {TerminationError} If task_finish tool is called
-     * @example
-     * const newMessages = await runner.run(abortController, messages);
+     * @param input - System prompt (explicit) and wire-projected history
+     * @returns {Promise<AgentMessage[]>} New messages produced during this run
      */
     async run(
         abortController: AbortController,
-        initialMessages: AgentMessage[]
+        input: { systemPrompt: string; wireHistory: AgentMessage[] }
     ): Promise<AgentMessage[]> {
-        // Get config from session at the start of run
-        const config = await this.session.getConfig();
-        const allowedUris = config.allowedUris || [];
-        const isSubAgent = config.isSubAgent || false;
+        const session = this.session;
+        const builder = session.renderDataBuilder ?? (session.renderDataBuilder = new RenderDataBuilder());
 
-        // Initialize ToolExecutor here since we needed async config
+        const allowedUris = session.metadata.allowed_uris || ['/'];
+        const isSubAgent = session.isSubAgent;
+
+        // Initialize ToolExecutor here since we needed the builder
         if (!this.toolExecutor) {
             this.toolExecutor = new ToolExecutor(
                 this.toolSet,
                 allowedUris,
                 this.session,
                 isSubAgent,
-                this.uiRenderer
+                builder
             );
         }
 
-        const messages = [...initialMessages];
+        const messages = [...input.wireHistory];
         const newMessages: AgentMessage[] = [];
         let loopCount = 0;
 
         while (loopCount < this.maxLoops) {
-            if (this.session.token.isCancellationRequested) {
+            if (abortController.signal.aborted) {
                 break;
             }
             loopCount++;
 
-            // Send-boundary system extraction: strip ALL system messages
-            // (normally just the first one) into the dedicated systemPrompt
-            // parameter; the rest stays as history in original order.
-            const systemTexts: string[] = [];
-            const history: Message[] = [];
-            for (const msg of messages) {
-                if (msg.role === 'system') {
-                    systemTexts.push(extractText(msg));
-                } else {
-                    history.push(msg);
-                }
-            }
-            const systemPrompt = systemTexts.join('\n\n');
-
-            // Snapshot the renderer at round start so a retry attempt can
+            // Snapshot the builder at round start so a retry attempt can
             // roll the UI back to "this round never started".
-            const roundSnapshot = this.uiRenderer.snapshotRound();
+            const roundSnapshot = builder.snapshotRound();
 
             let roundResult: StreamGenerateResult;
             try {
                 roundResult = await streamGenerate({
                     provider: this.provider,
-                    systemPrompt,
-                    history,
+                    systemPrompt: input.systemPrompt,
+                    history: messages,
                     tools: this.toolSet.getDefinitions(),
                     signal: abortController.signal,
                     onRetry: () => {
-                        this.uiRenderer.rollbackRound(roundSnapshot);
+                        builder.rollbackRound(roundSnapshot);
                     },
                     onProgress: async (content, reasoning, pendingTools) => {
-                        if (this.session.token.isCancellationRequested) {
+                        if (abortController.signal.aborted) {
                             return;
                         }
 
-                        const pendingBlocks = this.uiRenderer.formatPendingToolCalls(
+                        const pendingBlocks = builder.formatPendingToolCalls(
                             pendingTools,
                             this.toolSet,
                             isSubAgent
                         );
 
-                        const renderData = this.uiRenderer.updateActive(content, reasoning, pendingBlocks);
-                        await this.session.replaceOutput(JSON.stringify(renderData), { mimeType: MUTSUMI_AGENT_CHAT_MIME });
+                        const renderData = builder.updateActive(content, reasoning, pendingBlocks);
+                        session.publishRenderData(renderData);
                     }
                 });
             } catch (error: any) {
@@ -188,24 +162,13 @@ export class AgentRunner {
                     break;
                 }
 
-                // Network/API error - show notification and preserve history
+                // Network/API error — broadcast it (the session.error event is
+                // surfaced by the webview banner and the notification
+                // micro-frontend); the message stream only ever renders
+                // produced content, so nothing is appended to the render IR.
                 const errorMessage = error.message || String(error);
                 console.error('LLM Stream Error:', error);
-
-                // Show error as VSCode notification (non-modal)
-                const copyDetailsBtn = t('controller.copyDetails');
-                vscode.window.showErrorMessage(
-                    t('agentRunner.llmError', errorMessage),
-                    copyDetailsBtn
-                ).then(selection => {
-                    if (selection === copyDetailsBtn) {
-                        vscode.env.clipboard.writeText(error.stack || errorMessage);
-                    }
-                });
-
-                const errorMarkdown = `\n\n> ⚠️ **Error**: ${errorMessage.replace(/\n/g, ' ')}\n\n*Execution stopped due to network error. Previous output is preserved above.*`;
-                this.uiRenderer.appendBlock({ type: 'content', markdown: errorMarkdown });
-                await this.session.replaceOutput(JSON.stringify(this.uiRenderer.getCommittedRenderData()), { mimeType: MUTSUMI_AGENT_CHAT_MIME });
+                session.reportError(errorMessage, true);
 
                 break;
             }
@@ -220,20 +183,21 @@ export class AgentRunner {
             const assistantMsg: AgentMessage = roundResult.message;
             messages.push(assistantMsg);
             newMessages.push(assistantMsg);
+            session.appendMessage(assistantMsg);
 
             if (assistantMsg.toolCalls.length === 0) {
                 break;
             }
 
-            this.uiRenderer.commitRoundUI(roundResult.roundContent, roundResult.roundReasoning);
+            builder.commitRoundUI(roundResult.roundContent, roundResult.roundReasoning);
 
             const result = await this.toolExecutor.executeTools(
                 assistantMsg.toolCalls,
                 abortController.signal,
                 {
                     appendOutput: async (block: RenderBlock) => {
-                        this.uiRenderer.appendBlock(block);
-                        await this.session.replaceOutput(JSON.stringify(this.uiRenderer.getCommittedRenderData()), { mimeType: MUTSUMI_AGENT_CHAT_MIME });
+                        builder.appendBlock(block);
+                        session.publishRenderData(builder.getCommittedRenderData());
                     },
                     signalTermination: () => {
                         // Termination handled via return values
@@ -243,10 +207,13 @@ export class AgentRunner {
             const toolMessages = result.messages;
             messages.push(...toolMessages);
             newMessages.push(...toolMessages);
+            for (const toolMessage of toolMessages) {
+                session.appendMessage(toolMessage);
+            }
 
-            // Handle task completion (e.g., from task_finish tool)
+            // Handle task completion (e.g., from task_finish tool; the tool
+            // itself already reported through session.reportTaskFinished)
             if (result.isTaskComplete) {
-                await this.markSessionAsFinished();
                 break;
             }
 
@@ -254,68 +221,29 @@ export class AgentRunner {
             if (result.shouldTerminate) {
                 break;
             }
+
+            // Round boundary: inject steered user messages after the tool
+            // batch, before the next LLM call. Queue-mode messages are never
+            // injected here; they are handled by the drain loop after the run
+            // comes to a natural stop.
+            const steered = session.drainSteering();
+            for (const text of steered) {
+                const persisted = await session.commitUserMessage(text);
+                builder.commitTurnBoundary();
+                session.publishRenderData(builder.getRenderData());
+                const wireMessage = await projectUserMessageToWire(persisted);
+                messages.push(wireMessage);
+                newMessages.push(persisted);
+            }
         }
 
-        // Generate title after first user message (only once)
-        // Skip for LiteAgentSession which is used for background tasks like title generation
-        const userMessageCount = messages.filter(m => m.role === 'user').length;
-        if (userMessageCount === 1 && !(this.session instanceof LiteAgentSession)) {
-            void this.generateTitleIfNeeded(this.session, messages, config);
-        }
+        // Commit whatever remains in the active area so the turn's final state
+        // is fully committed. The final round has no tool calls and never hits
+        // the commitRoundUI path inside the loop; interrupt/error exits can
+        // also leave active content behind. A no-op when nothing is active.
+        builder.commitRoundUI('', '');
+        session.publishRenderData(builder.getCommittedRenderData());
 
         return newMessages;
-    }
-
-    /**
-     * Generates a title for the session after first user message.
-     * @private
-     * @param {IAgentSession} session - The agent session
-     * @param {AgentMessage[]} allMessages - Complete message history
-     * @param {AgentSessionConfig} sessionConfig - Session configuration
-     * @returns {Promise<void>}
-     */
-    private async generateTitleIfNeeded(
-        session: IAgentSession,
-        allMessages: AgentMessage[],
-        sessionConfig: AgentSessionConfig
-    ): Promise<void> {
-        // Title model priority: settings titleGeneratorModel > session metadata pair
-        let titleSelection = getTitleModelSelection();
-        if (!titleSelection && sessionConfig.metadata?.model && sessionConfig.metadata?.provider) {
-            titleSelection = { model: sessionConfig.metadata.model, provider: sessionConfig.metadata.provider };
-        }
-
-        if (!titleSelection) {
-            debugLogger.log('[AgentRunner] Title generation skipped: no titleGeneratorModel setting or session metadata pair');
-            return;
-        }
-
-        debugLogger.log(`[AgentRunner] Generating title for session (first user message received)`);
-
-        const notebook = session.supportsUI && 'execution' in session
-            ? (session as any).execution?.cell?.notebook
-            : undefined;
-
-        await this.titleGenerator.generateTitleForSession(session, allMessages, {
-            modelSelection: titleSelection
-        }, notebook);
-    }
-
-    /**
-     * Marks the session as finished.
-     * @private
-     * @returns {Promise<void>}
-     */
-    private async markSessionAsFinished(): Promise<void> {
-        // Persist the finished state via the session
-        // The session adapter will handle the actual persistence (e.g., notebook metadata, file, etc.)
-        const config = await this.session.getConfig();
-        if (config.metadata) {
-            // Use setConfig to safely update metadata, avoiding read-only object issues
-            this.session.setConfig({
-                metadata: { ...config.metadata, is_task_finished: true }
-            });
-        }
-        await this.session.save();
     }
 }

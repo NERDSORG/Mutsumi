@@ -69,7 +69,7 @@ function decodeGhostToolEntry(value: unknown): GhostToolEntry | null {
  * does not rewrite input. Any value that does not satisfy the current
  * GhostBlock shape is treated as absent.
  *
- * @param value - Raw metadata value read from a notebook cell or session file
+ * @param value - Raw metadata value read from a session file
  * @returns A normalized GhostBlock containing only known fields, or null when absent/invalid
  */
 export function decodeGhostBlock(value: unknown): GhostBlock | null {

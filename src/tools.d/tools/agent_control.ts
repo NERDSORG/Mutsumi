@@ -1,6 +1,4 @@
-import * as vscode from 'vscode';
 import { ITool, ToolContext } from '../interface';
-import { AgentOrchestrator } from '../../agent/agentOrchestrator';
 import { AgentTypeRegistry } from '../../registry/agentTypeRegistry';
 import { resolveUri } from '../utils';
 
@@ -8,7 +6,7 @@ export const dispatchSubagentsTool: ITool = {
     name: 'dispatch_subagents',
     definition: {
         name: 'dispatch_subagents',
-        description: 'Split into multiple parallel sub-agents. Creates new agent files immediately. The current agent will suspend until all sub-agents are finished (task_finish called) or their files are deleted.',
+        description: 'Split into multiple parallel sub-agents. Creates new agent sessions immediately. The current agent will suspend until all sub-agents are finished (task_finish called) or their sessions are deleted.',
         parameters: {
             type: 'object',
             properties: {
@@ -40,9 +38,8 @@ export const dispatchSubagentsTool: ITool = {
         }
     },
     execute: async (args: any, context: ToolContext) => {
-        const config = await context.session.getConfig();
-        const parentUuid = config.metadata?.uuid;
-        const parentAgentType = config.metadata?.agentType;
+        const parentUuid = context.session.metadata.uuid;
+        const parentAgentType = context.session.metadata.agentType;
         if (!parentUuid) return 'Error: No Agent UUID found.';
 
         const { context_broadcast, sub_agents } = args;
@@ -87,14 +84,11 @@ export const dispatchSubagentsTool: ITool = {
                 return agent;
             });
 
-            if (context.appendOutput) {
-                await context.appendOutput(`\n\n**🔄 Created ${normalizedSubAgents.length} sub-agents...**\nPlease run them manually in the sidebar or opened windows.\nWaiting for completion...`);
-            }
-
-            // This blocks until all children are finished or deleted
-            const report = await AgentOrchestrator.getInstance().requestDispatch(
-                parentUuid, 
-                context_broadcast, 
+            // Suspends until the dispatch is approved and all sub-agents have
+            // finished (or been deleted). Approved sub-agents start in the
+            // background immediately.
+            const report = await context.session.requestDispatch(
+                context_broadcast,
                 normalizedSubAgents,
                 context.abortSignal
             );
@@ -126,18 +120,17 @@ export const taskFinishTool: ITool = {
         }
     },
     execute: async (args: any, context: ToolContext) => {
-        const config = await context.session.getConfig();
-        const myUuid = config.metadata?.uuid;
+        const myUuid = context.session.metadata.uuid;
         if (!myUuid) return 'Error: No Agent UUID found.';
         const summary = args.context_summary;
-        
-        AgentOrchestrator.getInstance().reportTaskFinished(myUuid, summary);
-        
+
+        await context.session.reportTaskFinished(summary);
+
         // Signal task completion
         if (context.signalTermination) {
             context.signalTermination(true);
         }
-        
+
         return 'Task Finished. Report submitted.';
     },
     prettyPrint: (_args: any) => {
@@ -169,8 +162,7 @@ export const getAgentTypesTool: ITool = {
             // Get current agent type from args or session metadata
             let currentAgentType: string | undefined = args.current_agent_type;
             if (!currentAgentType) {
-                const config = await context.session.getConfig();
-                currentAgentType = config.metadata?.agentType;
+                currentAgentType = context.session.metadata.agentType;
             }
             
             if (!currentAgentType) {

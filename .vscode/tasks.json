@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Dev Host (no debug)",
+            "detail": "Workaround for microsoft/vscode#336233: launches the dev host without js-debug injection; then attach with 'Attach to Extension Host'.",
+            "type": "shell",
+            "command": "code",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceRoot}",
+                "--inspect-extensions=9333"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

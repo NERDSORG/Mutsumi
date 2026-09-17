@@ -9,6 +9,17 @@
             "args": ["--extensionDevelopmentPath=${workspaceRoot}"],
             "outFiles": ["${workspaceRoot}/out/**/*.js"],
             "preLaunchTask": "npm: compile"
+        },
+        {
+            // Workaround for microsoft/vscode#336233 (F5's js-debug injection
+            // intermittently aborts the extension host with exit code 134):
+            // launch the dev host via the "Dev Host (no debug)" task, then
+            // attach with this configuration.
+            "name": "Attach to Extension Host",
+            "type": "node",
+            "request": "attach",
+            "port": 9333,
+            "restart": true
         }
     ]
 }

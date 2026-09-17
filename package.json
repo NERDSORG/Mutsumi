@@ -17,11 +17,9 @@
     },
     "categories": [
         "AI",
-        "Notebooks"
+        "Chat"
     ],
-    "activationEvents": [
-        "onNotebook:mutsumi-notebook"
-    ],
+    "activationEvents": [],
     "main": "./dist/extension.js",
     "contributes": {
         "viewsContainers": {
@@ -48,12 +46,6 @@
                     "icon": "assets/sidebar-icon.png"
                 },
                 {
-                    "id": "mutsumi.contextSidebar",
-                    "name": "%view.contextItems.name%",
-                    "when": "true",
-                    "icon": "assets/sidebar-icon.png"
-                },
-                {
                     "id": "mutsumi.shellTaskSidebar",
                     "name": "%view.shellTasks.name%",
                     "when": "true",
@@ -61,27 +53,6 @@
                 }
             ]
         },
-        "notebooks": [
-            {
-                "type": "mutsumi-notebook",
-                "displayName": "%notebook.displayName%",
-                "selector": [
-                    {
-                        "filenamePattern": "*.mtm"
-                    }
-                ]
-            }
-        ],
-        "notebookRenderer": [
-            {
-                "id": "mutsumi-agent-renderer",
-                "displayName": "%notebookRenderer.displayName%",
-                "entrypoint": "./dist/notebookRenderer.js",
-                "mimeTypes": [
-                    "application/vnd.mutsumi.agent-chat"
-                ]
-            }
-        ],
         "commands": [
             {
                 "command": "mutsumi.newAgent",
@@ -113,118 +84,16 @@
                 "icon": "$(search)"
             },
             {
-                "command": "mutsumi.selectModel",
-                "title": "%command.selectModel.title%",
-                "category": "Mutsumi",
-                "icon": "$(server-environment)"
-            },
-            {
-                "command": "mutsumi.renameSession",
-                "title": "%command.renameSession.title%",
-                "category": "Mutsumi",
-                "icon": "$(symbol-keyword)"
-            },
-            {
-                "command": "mutsumi.debugContext",
-                "title": "%command.debugContext.title%",
-                "category": "Mutsumi",
-                "icon": "$(debug-console)"
-            },
-            {
-                "command": "mutsumi.pruneGhostBlocks",
-                "title": "%command.pruneGhostBlocks.title%",
-                "category": "Mutsumi",
-                "icon": "$(history)"
-            },
-            {
-                "command": "mutsumi.toggleAutoApprove",
-                "title": "%command.toggleAutoApprove.title%",
-                "category": "Mutsumi",
-                "icon": "$(run-all)"
-            },
-            {
-                "command": "mutsumi.toggleAutoApproveOn",
-                "title": "%command.toggleAutoApproveOn.title%",
-                "category": "Mutsumi",
-                "icon": "$(debug-disconnect)"
-            },
-            {
                 "command": "mutsumi.testRagSearch",
                 "title": "%command.testRagSearch.title%",
                 "category": "Mutsumi",
                 "icon": "$(search)"
             },
             {
-                "command": "mutsumi.compressConversation",
-                "title": "%command.compressConversation.title%",
-                "category": "Mutsumi",
-                "icon": "$(fold)"
-            },
-            {
-                "command": "mutsumi.viewContextItem",
-                "title": "%command.viewContextItem.title%",
-                "category": "Mutsumi",
-                "icon": "$(open-preview)"
-            },
-            {
-                "command": "mutsumi.toggleRule",
-                "title": "%command.toggleRule.title%",
-                "category": "Mutsumi",
-                "icon": "$(check)"
-            },
-            {
-                "command": "mutsumi.toggleSkill",
-                "title": "%command.toggleSkill.title%",
-                "category": "Mutsumi",
-                "icon": "$(check)"
-            },
-            {
-                "command": "mutsumi.removeMacro",
-                "title": "%command.removeMacro.title%",
-                "category": "Mutsumi",
-                "icon": "$(close)"
-            },
-            {
-                "command": "mutsumi.removeFile",
-                "title": "%command.removeFile.title%",
-                "category": "Mutsumi",
-                "icon": "$(close)"
-            },
-            {
-                "command": "mutsumi.refreshContextTree",
-                "title": "%command.refreshContextTree.title%",
-                "category": "Mutsumi",
-                "icon": "$(refresh)"
-            },
-            {
-                "command": "mutsumi.toggleMcpTool",
-                "title": "%command.toggleMcpTool.title%",
-                "category": "Mutsumi",
-                "icon": "$(check)"
-            },
-            {
-                "command": "mutsumi.toggleMcpServer",
-                "title": "%command.toggleMcpServer.title%",
-                "category": "Mutsumi",
-                "icon": "$(check-all)"
-            },
-            {
-                "command": "mutsumi.refreshMcpServers",
-                "title": "%command.refreshMcpServers.title%",
-                "category": "Mutsumi",
-                "icon": "$(refresh)"
-            },
-            {
                 "command": "mutsumi.clearToolCache",
                 "title": "%command.clearToolCache.title%",
                 "category": "Mutsumi",
                 "icon": "$(clear-all)"
-            },
-            {
-                "command": "mutsumi.generateHttpServerPassword",
-                "title": "%command.generateHttpServerPassword.title%",
-                "category": "Mutsumi",
-                "icon": "$(key)"
             },
             {
                 "command": "mutsumi.detachShellTask",
@@ -243,18 +112,6 @@
             }
         ],
         "menus": {
-            "view/title": [
-                {
-                    "command": "mutsumi.refreshContextTree",
-                    "when": "view == mutsumi.contextSidebar",
-                    "group": "navigation"
-                },
-                {
-                    "command": "mutsumi.refreshMcpServers",
-                    "when": "view == mutsumi.contextSidebar",
-                    "group": "navigation@1"
-                }
-            ],
             "view/item/context": [
                 {
                     "command": "mutsumi.openAgentFile",
@@ -277,46 +134,14 @@
                     "group": "inline@0"
                 },
                 {
-                    "command": "mutsumi.toggleRule",
-                    "when": "viewItem == ruleActive",
-                    "group": "inline",
-                    "alt": "mutsumi.toggleRule"
-                },
-                {
-                    "command": "mutsumi.toggleRule",
-                    "when": "viewItem == ruleInactive",
-                    "group": "inline"
-                },
-                {
-                    "command": "mutsumi.toggleSkill",
-                    "when": "viewItem == skillActive",
-                    "group": "inline",
-                    "alt": "mutsumi.toggleSkill"
-                },
-                {
-                    "command": "mutsumi.toggleSkill",
-                    "when": "viewItem == skillInactive",
-                    "group": "inline"
-                },
-                {
-                    "command": "mutsumi.toggleMcpTool",
-                    "when": "viewItem == mcpToolEnabled || viewItem == mcpToolDisabled",
-                    "group": "inline"
-                },
-                {
-                    "command": "mutsumi.toggleMcpServer",
-                    "when": "viewItem == mcpServerEnabled || viewItem == mcpServerDisabled",
+                    "command": "mutsumi.approveRequest",
+                    "when": "viewItem == pendingDispatch",
                     "group": "inline@1"
                 },
                 {
-                    "command": "mutsumi.removeMacro",
-                    "when": "viewItem == macro",
-                    "group": "inline"
-                },
-                {
-                    "command": "mutsumi.removeFile",
-                    "when": "viewItem == file",
-                    "group": "inline@1"
+                    "command": "mutsumi.rejectRequest",
+                    "when": "viewItem == pendingDispatch",
+                    "group": "inline@2"
                 },
                 {
                     "command": "mutsumi.detachShellTask",
@@ -350,48 +175,6 @@
                 {
                     "command": "mutsumi.copyReference",
                     "group": "mutsumi-group"
-                }
-            ],
-            "notebook/toolbar": [
-                {
-                    "command": "mutsumi.selectModel",
-                    "group": "navigation@1",
-                    "when": "notebookType == mutsumi-notebook"
-                },
-                {
-                    "command": "mutsumi.renameSession",
-                    "group": "navigation@3",
-                    "when": "notebookType == mutsumi-notebook"
-                },
-                {
-                    "command": "mutsumi.pruneGhostBlocks",
-                    "group": "navigation@4",
-                    "when": "notebookType == mutsumi-notebook"
-                },
-                {
-                    "command": "mutsumi.debugContext",
-                    "group": "navigation@5",
-                    "when": "notebookType == mutsumi-notebook"
-                },
-                {
-                    "command": "mutsumi.toggleAutoApprove",
-                    "group": "navigation@6",
-                    "when": "notebookType == mutsumi-notebook && !mutsumi:autoApproveEnabled"
-                },
-                {
-                    "command": "mutsumi.toggleAutoApproveOn",
-                    "group": "navigation@6",
-                    "when": "notebookType == mutsumi-notebook && mutsumi:autoApproveEnabled"
-                },
-                {
-                    "command": "mutsumi.testRagSearch",
-                    "group": "navigation@7",
-                    "when": "notebookType == mutsumi-notebook"
-                },
-                {
-                    "command": "mutsumi.compressConversation",
-                    "group": "navigation@8",
-                    "when": "notebookType == mutsumi-notebook"
                 }
             ]
         },
@@ -485,22 +268,6 @@
                         "provider"
                     ]
                 },
-                "mutsumi.compressModel": {
-                    "type": "object",
-                    "markdownDescription": "%configuration.compressModel.markdownDescription%",
-                    "properties": {
-                        "model": {
-                            "type": "string"
-                        },
-                        "provider": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "model",
-                        "provider"
-                    ]
-                },
                 "mutsumi.embeddingEndpoint": {
                     "type": "string",
                     "default": "",
@@ -511,28 +278,6 @@
                     "default": 60,
                     "minimum": 0,
                     "description": "%configuration.shellSyncTimeout.description%"
-                },
-                "mutsumi.httpServer.enabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "%configuration.httpServer.enabled.description%"
-                },
-                "mutsumi.httpServer.password": {
-                    "type": "string",
-                    "default": "",
-                    "description": "%configuration.httpServer.password.description%"
-                },
-                "mutsumi.httpServer.host": {
-                    "type": "string",
-                    "default": "127.0.0.1",
-                    "description": "%configuration.httpServer.host.description%"
-                },
-                "mutsumi.httpServer.port": {
-                    "type": "number",
-                    "default": 3000,
-                    "minimum": 1,
-                    "maximum": 65535,
-                    "description": "%configuration.httpServer.port.description%"
                 },
                 "mutsumi.autoApproveEnabled": {
                     "type": "boolean",
@@ -687,7 +432,19 @@
                     }
                 }
             }
-        }
+        },
+        "customEditors": [
+            {
+                "viewType": "mutsumi.chat",
+                "displayName": "%chatEditor.displayName%",
+                "selector": [
+                    {
+                        "filenamePattern": "*.mtm"
+                    }
+                ],
+                "priority": "default"
+            }
+        ]
     },
     "scripts": {
         "vscode:prepublish": "pnpm run check-types && node esbuild.js --production",
@@ -705,18 +462,16 @@
         "@moonshot-ai/kosong": "github:NERDSORG/kimi-code-upstream-monorepo#main&path:packages/kosong",
         "@types/better-sqlite3": "^7.6.13",
         "@types/diff": "^8.0.0",
-        "@types/express": "^5.0.6",
         "@types/node": "^24.13.4",
         "@types/node-notifier": "^8.0.5",
         "@types/uuid": "^9.0.8",
         "@types/vscode": "^1.108.1",
+        "@vscode/codicons": "0.0.46-24",
         "@vscode/vsce": "^3.6.0",
-        "body-parser": "^2.2.2",
         "diff": "^8.0.3",
         "electron": "^39.0.0",
         "electron-rebuild": "^3.2.9",
         "esbuild": "^0.25.0",
-        "express": "^5.2.1",
         "gray-matter": "^4.0.3",
         "hast-util-to-html": "^9.0.5",
         "iconv-lite": "^0.6.3",

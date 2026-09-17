@@ -1,12 +1,29 @@
+/**
+ * @fileoverview Context assembly for agent sessions.
+ *
+ * Three functions over the session's persisted state:
+ *
+ * - {@link assembleSystemPrompt}: metadata + workspace → system prompt
+ * - {@link assembleUserMessage}: raw input text → persistable user message
+ *   (template rendering, context-item differential, ghost block attachment)
+ * - {@link assembleWireHistory}: persisted history → wire-protocol messages
+ *   (ghost markdown projection, image part resolution)
+ *
+ * The persisted form is canonical; the wire form is a projection rebuilt on
+ * every run. The history is a flat message array.
+ *
+ * @module contextManagement/history
+ */
+
 import * as vscode from 'vscode';
 import { extractText } from '@moonshot-ai/kosong';
 import { AgentMessage, AgentMetadata, ContextItem } from '../types';
-import { IAgentSession } from '../adapters/interfaces';
 import { getSystemPrompt, getRulesContext } from './prompts';
 import { TemplateEngine } from './templateEngine';
 import { SkillManager } from './skillManager';
 import {
     collectAvailableFileVersions,
+    decodeGhostBlock,
     ghostBlockFromContextItems,
     ghostBlockToMarkdown,
     isEmptyGhostBlock
@@ -18,76 +35,101 @@ import {
 } from './utils';
 
 /**
- * @description Build Agent's conversation history context.
- * Ghost blocks are consumed and persisted as structured GhostBlock objects;
- * markdown is projected only when assembling provider-facing message content.
- * @param session - The agent session providing history and persistence
- * @param currentPrompt - Optional current user prompt (if not provided, uses session.getInput())
- * @returns Object containing messages array, allowed URIs, and sub-agent status
+ * Minimal session surface needed by history assembly.
+ * Implemented by BackendSession; declared here so contextManagement does not
+ * depend on the backend module graph.
  */
-export async function buildInteractionHistory(
-    session: IAgentSession,
-    currentPrompt?: string
-): Promise<{ messages: AgentMessage[], allowedUris: string[], isSubAgent: boolean }> {
-    // Get current prompt from session if not provided
-    if (!currentPrompt) {
-        currentPrompt = await session.getInput();
-    }
-    const messages: AgentMessage[] = [];
+export interface HistoryAssemblySession {
+    readonly metadata: AgentMetadata;
+    readonly history: AgentMessage[];
+}
 
-    // Get config and metadata from session
-    const config = await session.getConfig();
-    const metadata = config.metadata || {} as AgentMetadata;
-    const allowedUris = config.allowedUris || metadata.allowed_uris || ['/'];
-    const isSubAgent = config.isSubAgent || !!metadata.parent_agent_id;
-
-    // Get workspace URI
-    const wsUri = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri :
-        (config.resourceUri ? vscode.Uri.parse(config.resourceUri) : undefined);
-
+function requireWorkspaceUri(): vscode.Uri {
+    const wsUri = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!wsUri) {
         throw new Error('No workspace available for resolving context references');
     }
+    return wsUri;
+}
 
-    // Extract and merge macros
-    const persistedMacroItems = (metadata.contextItems || []).filter(item => item.type === 'macro');
-    const persistedMacros: Record<string, string> = {};
-    for (const item of persistedMacroItems) {
-        persistedMacros[item.key] = item.content;
+/** Extract macro definitions persisted in metadata context items. */
+function persistedMacros(metadata: AgentMetadata): Record<string, string> {
+    const macros: Record<string, string> = {};
+    for (const item of metadata.contextItems ?? []) {
+        if (item.type === 'macro') {
+            macros[item.key] = item.content;
+        }
     }
-    const localMacros = extractMacroDefinitions(currentPrompt);
-    const macros = { ...persistedMacros, ...localMacros };
+    return macros;
+}
+
+/**
+ * Assemble the system prompt from session metadata and workspace state.
+ * Pure function of metadata + workspace: role macro, rules (recursively
+ * collected, template-expanded) and skills markdown.
+ */
+export async function assembleSystemPrompt(metadata: AgentMetadata): Promise<string> {
+    const wsUri = requireWorkspaceUri();
+    const allowedUris = metadata.allowed_uris || ['/'];
+    const isSubAgent = !!metadata.parent_agent_id;
+
+    const rulesItems = await getRulesContext(wsUri, allowedUris, metadata.activeRules, persistedMacros(metadata));
+    let systemPromptContent = await getSystemPrompt(wsUri, allowedUris, rulesItems, isSubAgent);
+
+    const skillsMarkdown = SkillManager.getInstance().generateSkillsMarkdown(metadata.activeSkills);
+    if (skillsMarkdown && skillsMarkdown.trim()) {
+        systemPromptContent += '\n\n# Installed Skills\n' + skillsMarkdown;
+    }
+
+    return systemPromptContent;
+}
+
+/**
+ * Assemble a persistable user message from raw input text.
+ *
+ * Runs the template engine in APPEND mode (collecting ghost items), performs
+ * the hash/version differential against `metadata.contextItems`, updates the
+ * persisted context items in place, and attaches the resulting ghost block to
+ * the returned message's `metadata.last_ghost_block`.
+ *
+ * The returned message content is the template-rendered text WITHOUT the
+ * ghost markdown (that is projected at wire-assembly time); image references
+ * stay as markdown links (resolved to image parts at wire-assembly time).
+ */
+export async function assembleUserMessage(
+    session: HistoryAssemblySession,
+    text: string
+): Promise<AgentMessage> {
+    const metadata = session.metadata;
+    const allowedUris = metadata.allowed_uris || ['/'];
+    const wsUri = requireWorkspaceUri();
+
+    // Merge persisted macros with locally defined ones (local wins)
+    const localMacros = extractMacroDefinitions(text);
+    const macros = { ...persistedMacros(metadata), ...localMacros };
     const macroContextItems: ContextItem[] = Object.entries(macros).map(([key, content]) => ({
         type: 'macro' as const,
         key,
         content,
     }));
 
-    // 1. Static System Prompt (Now includes Rules)
-    const activeRules = metadata.activeRules;
-    const rulesItems = await getRulesContext(wsUri, allowedUris, activeRules, macros);
-    let systemPromptContent = await getSystemPrompt(wsUri, allowedUris, rulesItems, isSubAgent);
-
-    // Append skills information if available
-    const activeSkills = metadata.activeSkills;
-    const skillsMarkdown = SkillManager.getInstance().generateSkillsMarkdown(activeSkills);
-    if (skillsMarkdown && skillsMarkdown.trim()) {
-        systemPromptContent += '\n\n# Installed Skills\n' + skillsMarkdown;
-    }
-
-    messages.push({
-        role: 'system',
-        content: [{ type: 'text', text: systemPromptContent }],
-        toolCalls: []
-    });
-
-    // Get previous ghost blocks for version tracking
-    const previousGhostBlocks = session.getPreviousGhostBlocks
-        ? await session.getPreviousGhostBlocks()
-        : [];
+    // Ghost blocks of previous user messages, aligned by position; invalid or
+    // absent persisted values decode to null placeholders.
+    const previousGhostBlocks = session.history
+        .filter(m => m.role === 'user')
+        .map(m => decodeGhostBlock(m.metadata?.last_ghost_block));
     const availableContentVersions = collectAvailableFileVersions(previousGhostBlocks);
 
-    // 2. Prepare Context Map & Differential Update
+    // Render the input (APPEND: collected items feed the ghost block)
+    const { renderedText: processedPrompt, collectedItems: currentContext } = await TemplateEngine.render(
+        text,
+        macros,
+        wsUri,
+        allowedUris,
+        'APPEND'
+    );
+
+    // Differential update against persisted context items
     const persistedItems: ContextItem[] = metadata.contextItems || [];
     const persistedMap = new Map<string, ContextItem>();
     for (const item of persistedItems) {
@@ -95,15 +137,6 @@ export async function buildInteractionHistory(
             persistedMap.set(item.key, item);
         }
     }
-
-    // 2a. Parse Current Prompt using TemplateEngine (APPEND mode)
-    const { renderedText: processedPrompt, collectedItems: currentContext } = await TemplateEngine.render(
-        currentPrompt,
-        macros,
-        wsUri,
-        allowedUris,
-        'APPEND'
-    );
 
     const finalItemsToDisplay: ContextItem[] = [];
     const newContextItemsForMetadata: ContextItem[] = persistedItems.filter(item => item.type === 'file');
@@ -124,28 +157,22 @@ export async function buildInteractionHistory(
                     version = (prevItem.version || 0) + 1;
                 }
             } else {
-                // Check if this file was in persistedItems under a different object reference but same key?
-                // persistedMap handles keys. If not in map, it's new.
                 version = 1;
             }
 
-            // Update item metadata
             item.lastHash = currentHash;
             item.version = version;
 
             const hasPreviousContent = !isModified && availableContentVersions.has(`${item.key}::${version}`);
 
             if (isModified || !hasPreviousContent) {
-                // Full content
                 finalItemsToDisplay.push(item);
             } else {
-                // Reference only
                 const refItem = { ...item };
                 refItem.metadata = { ...refItem.metadata, isReference: true };
                 finalItemsToDisplay.push(refItem);
             }
 
-            // Update global metadata tracking
             const index = newContextItemsForMetadata.findIndex(i => i.key === item.key && i.type === 'file');
             if (index !== -1) {
                 newContextItemsForMetadata[index] = item;
@@ -159,73 +186,52 @@ export async function buildInteractionHistory(
     }
 
     newContextItemsForMetadata.push(...macroContextItems);
+    metadata.contextItems = newContextItemsForMetadata;
 
-    // 3. Build Message History from session
-    const history = await session.getHistory();
+    const currentGhostBlock = ghostBlockFromContextItems(finalItemsToDisplay);
 
-    // Track ghost block index separately (only for user messages)
-    let ghostBlockIndex = 0;
+    const message: AgentMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: processedPrompt }],
+        toolCalls: []
+    };
+    if (!isEmptyGhostBlock(currentGhostBlock)) {
+        message.metadata = { last_ghost_block: currentGhostBlock };
+    }
+    return message;
+}
 
-    // Process raw history - expand interactions and attach ghost blocks
-    // NOTE: mutsumi_interaction ONLY exists on user messages, containing the
-    // assistant and tool messages that followed that user prompt
-    for (const msg of history) {
+/**
+ * Project a persisted user message into wire form: image links resolved to
+ * image parts, persisted ghost block projected to markdown and appended.
+ */
+export async function projectUserMessageToWire(msg: AgentMessage): Promise<AgentMessage> {
+    const content = await parseUserMessageWithImages(extractText(msg));
+    const ghost = decodeGhostBlock(msg.metadata?.last_ghost_block);
+    const ghostMarkdown = ghost && !isEmptyGhostBlock(ghost) ? ghostBlockToMarkdown(ghost) : '';
+    if (ghostMarkdown) {
+        content.push({ type: 'text', text: ghostMarkdown });
+    }
+    return { role: 'user', content, toolCalls: [] };
+}
+
+/**
+ * Project the session's persisted flat history into wire-protocol messages:
+ * user messages get their ghost markdown + image parts; assistant/tool
+ * messages pass through (pipeline metadata stripped); system messages are
+ * dropped (the system prompt is assembled separately).
+ */
+export async function assembleWireHistory(session: HistoryAssemblySession): Promise<AgentMessage[]> {
+    const wire: AgentMessage[] = [];
+    for (const msg of session.history) {
         if (msg.role === 'user') {
-            // Persisted user content is a single text part holding the raw
-            // markdown; images are re-parsed at assembly time (never persisted).
-            const multiModalContent = await parseUserMessageWithImages(extractText(msg));
-            // Append the persisted ghost block if it exists
-            const savedGhostBlock = previousGhostBlocks[ghostBlockIndex] ?? null;
-            ghostBlockIndex++;
-            const savedGhostMarkdown = savedGhostBlock && !isEmptyGhostBlock(savedGhostBlock)
-                ? ghostBlockToMarkdown(savedGhostBlock)
-                : '';
-
-            if (savedGhostMarkdown) {
-                multiModalContent.push({ type: 'text', text: savedGhostMarkdown });
-            }
-            messages.push({ role: 'user', content: multiModalContent, toolCalls: [] });
-
-            // Expand mutsumi_interaction from user message metadata
-            // This contains the assistant response and any tool calls/results
-            const interaction = msg.metadata?.mutsumi_interaction as AgentMessage[] | undefined;
-            if (interaction && Array.isArray(interaction)) {
-                messages.push(...interaction);
-            }
-        } else if (msg.role === 'assistant') {
-            // Assistant messages in history are standalone (orphan messages without a preceding user)
-            // or legacy format. Add them directly.
-            messages.push(msg);
+            wire.push(await projectUserMessageToWire(msg));
         } else if (msg.role === 'system') {
-            // Skip, we already added system prompt
             continue;
         } else {
-            // tool, etc. - add directly
-            messages.push(msg);
+            const { metadata: _pipelineMetadata, ...rest } = msg;
+            wire.push(rest as AgentMessage);
         }
     }
-
-    // 4. Assemble Final User Message
-    const currentGhostBlock = ghostBlockFromContextItems(finalItemsToDisplay);
-    const currentGhostMarkdown = isEmptyGhostBlock(currentGhostBlock)
-        ? ''
-        : ghostBlockToMarkdown(currentGhostBlock);
-
-    // 5. Persist context items and ghost block via session
-    if (session.updateContextItems) {
-        await session.updateContextItems(newContextItemsForMetadata);
-    }
-
-    if (session.persistGhostBlock) {
-        await session.persistGhostBlock(currentGhostBlock);
-    }
-
-    // 6. Push final message
-    const currentMultiModalContent = await parseUserMessageWithImages(processedPrompt);
-    if (currentGhostMarkdown) {
-        currentMultiModalContent.push({ type: 'text', text: currentGhostMarkdown });
-    }
-    messages.push({ role: 'user', content: currentMultiModalContent, toolCalls: [] });
-
-    return { messages, allowedUris, isSubAgent };
+    return wire;
 }
