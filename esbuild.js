@@ -44,8 +44,6 @@ async function main() {
 		outfile: "dist/extension.js",
 		external: [
 			"vscode",
-			"better-sqlite3",
-			"sqlite-vec",
 			"web-tree-sitter",
 			"node-notifier",
 		],

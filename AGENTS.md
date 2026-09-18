@@ -29,7 +29,7 @@ src/
 ├── tools.d/           # 工具系统：toolManager、interface、edit_file（编辑事务）、tools/、preExecution
 ├── config/ + registry/ # Agent 分角色系统（配置加载/校验/解析）
 ├── mcp/               # MCP 宿主
-├── codebase/          # 代码库服务与 RAG
+├── codebase/          # 代码库服务：Tree-sitter 大纲（project_outline 依赖）
 ├── sidebar/           # 三个 TreeView：agent / approval / shellTask
 └── types.ts / utils.ts / i18n.ts / extension.ts
 ```
@@ -150,7 +150,6 @@ history.ts 提供三个纯函数（持久化形态 ↔ 线协议形态的投影�
 - 配置流（`config/` + `registry/`）：整体校验候选 → 原子替换 → 仅 `mutsumi.mcpServers` 变化才重连 MCP。
 - 工具链路：`createToolSetForAgent` 组合内置 + MCP 快照 ∩ 当前可用 + 子 Agent task_finish。MCP 工具不进 toolSets；`ToolSet.addTool` 拒绝重名。
 - MCP 宿主：单例 McpRegistry、无连接池/自动重连；`McpToolAdapter` readOnlyHint 自动执行，其余经 `session.requestApproval` 审批。
-- RAG/codebase：`query_codebase` 按 embedding endpoint 是否配置被条件剔除。
 
 ---
 
@@ -161,17 +160,17 @@ debugLogger / toolsLogger 初始化
   → ToolRegistry.initialize()
   → loadMutsumiConfig + 校验 + ToolSetRegistry/AgentTypeRegistry
   → McpRegistry.reload
-  → SkillManager / Codebase / RAG
+  → SkillManager / Codebase
   → AgentBackend 构造 + initialize()（scanAllAgents + registerBackendHandlers + 预执行会话工厂注册）
   → AgentSidebarProvider（三棵树）
   → 配置变化监听（原子替换 + MCP 按需 reload）
   → AdapterRegistry：Lite + WebView 适配器 activate
   → 通知微前端订阅（session.error / approval.requested）
   → .mtm 删除 watcher → backend.notifyFileDeleted
-  → 命令注册（newAgent/copyReference/clearToolCache/testRagSearch）+ activateEditSupport
+  → 命令注册（newAgent/copyReference/clearToolCache）+ activateEditSupport
 ```
 
-当前命令集：`newAgent`（原生 QuickPick + 后端 createSession + openWith）、`openAgentFile`、审批三命令（`approveRequest`/`rejectRequest`/`customRequestAction`，发 FtB）、shell 任务三命令、`copyReference`、`clearToolCache`、`testRagSearch`。
+当前命令集：`newAgent`（原生 QuickPick + 后端 createSession + openWith）、`openAgentFile`、审批三命令（`approveRequest`/`rejectRequest`/`customRequestAction`，发 FtB）、shell 任务三命令、`copyReference`、`clearToolCache`。
 
 ---
 
@@ -193,7 +192,7 @@ debugLogger / toolsLogger 初始化
 
 ## 9. 构建与验证
 
-包管理器为 **pnpm**（`packageManager: pnpm@12.4.1`）。新环境首次构建前必须 `corepack enable`（Node ≥ 24 自带 corepack）安装 pnpm shim，否则终端与 vsce（它按 `packageManager` 字段调用 pnpm）都找不到 `pnpm` 命令。pnpm 配置集中在 `pnpm-workspace.yaml`：**`nodeLinker: hoisted`** 是为了让 vsce 的 `npm ls` 依赖分析继续工作，从而使 better-sqlite3 等 4 个原生 external 正常进入 vsix；**`allowBuilds`** 是依赖 install 脚本的白名单（pnpm ≥11 不再读 package.json 的 `pnpm` 字段）。新增带 install 脚本的原生依赖时必须把它加进 `allowBuilds`，否则 `pnpm install` 会以 `ERR_PNPM_IGNORED_BUILDS` 中止。禁止回退 npm（`#ref&path:` 等 pnpm 私有语法与 lockfile 不兼容）。
+包管理器为 **pnpm**（`packageManager: pnpm@12.4.1`）。新环境首次构建前必须 `corepack enable`（Node ≥ 24 自带 corepack）安装 pnpm shim，否则终端与 vsce（它按 `packageManager` 字段调用 pnpm）都找不到 `pnpm` 命令。pnpm 配置集中在 `pnpm-workspace.yaml`：**`nodeLinker: hoisted`** 是为了让 vsce 的 `npm ls` 依赖分析继续工作，从而使 `web-tree-sitter`、`node-notifier` 等 external 依赖正常进入 vsix；**`allowBuilds`** 是依赖 install 脚本的白名单（pnpm ≥11 不再读 package.json 的 `pnpm` 字段）。新增带 install 脚本的原生依赖时必须把它加进 `allowBuilds`，否则 `pnpm install` 会以 `ERR_PNPM_IGNORED_BUILDS` 中止。禁止回退 npm（`#ref&path:` 等 pnpm 私有语法与 lockfile 不兼容）。
 
 ```bash
 pnpm run check-types   # tsc --noEmit（主 tsconfig + webview UI 的 tsconfig.renderer.json）

@@ -3,7 +3,7 @@
  * @module extension
  *
  * Assembly point: initializes logging, the tool registry, the agent-type
- * configuration system, MCP, skills and RAG, then the AgentBackend (the sole
+ * configuration system, MCP, and skills, then the AgentBackend (the sole
  * state authority), the frontend adapters, the sidebar, and the notification
  * micro-frontend.
  */
@@ -15,7 +15,6 @@ import { AgentSidebarProvider } from "./sidebar/agentSidebar";
 import { activateEditSupport } from "./tools.d/edit_file";
 
 import { CodebaseService } from "./codebase/service";
-import { RagService } from "./codebase/rag/service";
 import { SkillManager } from "./contextManagement/skillManager";
 import { t } from "./i18n";
 import { ToolRegistry } from "./tools.d/toolManager";
@@ -36,7 +35,6 @@ import { AgentBackend } from "./backend/agentBackend";
 import { AdapterRegistry } from "./frontend/registry";
 import { LiteAdapter } from "./frontends/lite/liteAdapter";
 import { WebViewAdapter } from "./frontends/webview/webviewAdapter";
-import { registerTestRagSearchCommand } from "./commands/testRagSearch";
 import { initializeRules } from "./contextManagement/prompts";
 
 /**
@@ -147,47 +145,6 @@ async function activateImpl(
 
 	// Initialize Codebase Service
 	CodebaseService.getInstance().initialize(context).catch(console.error);
-
-	// Initialize RAG Service
-	const ragService = await RagService.getInstance(context);
-	debugLogger.log("[Extension] RagService initialized");
-	context.subscriptions.push(ragService);
-
-	// 只在 RAG 启用时执行索引更新和注册文件监听器
-	if (ragService.isEmbeddingEnabled()) {
-		for (const wf of vscode.workspace.workspaceFolders ?? []) {
-			ragService.updateWorkspace(wf.uri).catch((err) => {
-				debugLogger.log(`[RAG] Failed to update workspace on startup: ${err}`);
-			});
-		}
-
-		const pendingUpdates = new Map<string, NodeJS.Timeout>();
-		context.subscriptions.push(
-			vscode.workspace.onDidSaveTextDocument((doc) => {
-				const uri = doc.uri;
-				if (uri.fsPath.includes(".mutsumi")) {
-					return;
-				}
-				const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
-				if (!wsFolder) {
-					return;
-				}
-
-				const wsKey = wsFolder.uri.toString();
-				const existing = pendingUpdates.get(wsKey);
-				if (existing) {
-					clearTimeout(existing);
-				}
-				const timer = setTimeout(() => {
-					pendingUpdates.delete(wsKey);
-					ragService.updateWorkspace(wsFolder.uri).catch((err) => {
-						debugLogger.log(`[RAG] Failed to update workspace on save: ${err}`);
-					});
-				}, 500);
-				pendingUpdates.set(wsKey, timer);
-			}),
-		);
-	}
 
 	// ------------------------------------------------------------------
 	// Frontend adapters
@@ -399,9 +356,6 @@ function registerCommands(context: vscode.ExtensionContext, backend: AgentBacken
 			vscode.window.showInformationMessage(t("clearToolCache.done"));
 		}),
 	);
-
-	// RAG search test command
-	registerTestRagSearchCommand(context);
 }
 
 /**

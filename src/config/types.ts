@@ -57,7 +57,6 @@ export const DEFAULT_MUTSUMI_CONFIG: MutsumiConfig = {
 			"system_info",
 			"project_outline",
 			"diagnostics",
-			"query_codebase",
 			"inspect_shell_task",
 			"kill_shell_task",
 		],

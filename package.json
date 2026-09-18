@@ -84,12 +84,6 @@
                 "icon": "$(search)"
             },
             {
-                "command": "mutsumi.testRagSearch",
-                "title": "%command.testRagSearch.title%",
-                "category": "Mutsumi",
-                "icon": "$(search)"
-            },
-            {
                 "command": "mutsumi.clearToolCache",
                 "title": "%command.clearToolCache.title%",
                 "category": "Mutsumi",
@@ -257,11 +251,6 @@
                         "model",
                         "provider"
                     ]
-                },
-                "mutsumi.embeddingEndpoint": {
-                    "type": "string",
-                    "default": "",
-                    "description": "%configuration.embeddingEndpoint.description%"
                 },
                 "mutsumi.shellSyncTimeout": {
                     "type": "number",
@@ -447,10 +436,8 @@
     },
     "packageManager": "pnpm@12.4.1",
     "devDependencies": {
-        "@electron/rebuild": "^4.0.3",
         "@modelcontextprotocol/sdk": "^1.30.0",
         "@moonshot-ai/kosong": "github:NERDSORG/kimi-code-upstream-monorepo#main&path:packages/kosong",
-        "@types/better-sqlite3": "^7.6.13",
         "@types/diff": "^8.0.0",
         "@types/node": "^24.13.4",
         "@types/node-notifier": "^8.0.5",
@@ -459,8 +446,6 @@
         "@vscode/codicons": "0.0.46-24",
         "@vscode/vsce": "^3.6.0",
         "diff": "^8.0.3",
-        "electron": "^39.0.0",
-        "electron-rebuild": "^3.2.9",
         "esbuild": "^0.25.0",
         "gray-matter": "^4.0.3",
         "hast-util-to-html": "^9.0.5",
@@ -476,9 +461,7 @@
         "uuid": "^9.0.1"
     },
     "dependencies": {
-        "better-sqlite3": "^12.8.0",
         "node-notifier": "^10.0.1",
-        "sqlite-vec": "^0.1.7-alpha.2",
         "web-tree-sitter": "^0.22.2"
     }
 }

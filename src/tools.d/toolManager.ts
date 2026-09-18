@@ -26,10 +26,8 @@ import { projectOutlineTool } from "./tools/project_outline";
 import { getWarningErrorTool } from "./tools/diagnostics";
 import { inspectShellTaskTool } from "./tools/inspect_shell_task";
 import { killShellTaskTool } from "./tools/kill_shell_task";
-import { queryCodebaseTool } from "./tools/rag";
 import { AgentTypeRegistry } from "../registry/agentTypeRegistry";
 import { ToolSetRegistry } from "../registry/toolSetRegistry";
-import * as vscode from "vscode";
 import type { Tool } from "@moonshot-ai/kosong";
 import { getCachedResult, setCachedResult } from "./cache";
 import { McpRegistry } from "../mcp/registry";
@@ -237,7 +235,6 @@ export class ToolRegistry {
 		task_finish: taskFinishTool,
 		get_agent_types: getAgentTypesTool,
 		communicate: communicateTool,
-		query_codebase: queryCodebaseTool,
 	};
 
 	/**
@@ -246,11 +243,6 @@ export class ToolRegistry {
 	 */
 	static initialize(): void {
 		if (ToolRegistry.initialized) return;
-
-		// Check if embedding endpoint is configured
-		const config = vscode.workspace.getConfiguration("mutsumi");
-		const embeddingEndpoint = config.get<string>("embeddingEndpoint") ?? "";
-		const isRagEnabled = embeddingEndpoint.trim() !== "";
 
 		// Register all common tools
 		ToolRegistry.commonTools = [
@@ -272,11 +264,6 @@ export class ToolRegistry {
 			getAgentTypesTool,
 			communicateTool,
 		];
-
-		// Only add RAG tool if embedding endpoint is configured
-		if (isRagEnabled) {
-			ToolRegistry.commonTools.push(queryCodebaseTool);
-		}
 
 		// Build the tool name map for quick lookup
 		ToolRegistry.toolNameMap.clear();

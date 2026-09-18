@@ -31,21 +31,9 @@ jobs:
         run: pnpm run compile
 
   package:
-    name: Package VSIX (${{ matrix.target }})
+    name: Package VSIX
     needs: check
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            target: win32-x64
-          - os: macos-latest
-            target: darwin-arm64
-          - os: ubuntu-latest
-            target: linux-x64
-          - os: ubuntu-24.04-arm
-            target: linux-arm64
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout source
@@ -77,122 +65,18 @@ jobs:
         run: pnpm run compile
 
       - name: Package VSIX
-        run: pnpm exec vsce package --target ${{ matrix.target }}
-
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: mutsumi-${{ matrix.target }}
-          path: ./*.vsix
-          if-no-files-found: error
-
-      - name: Upload better-sqlite3 native artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: better-sqlite3-${{ matrix.target }}
-          path: ./node_modules/better-sqlite3/build/Release/better_sqlite3.node
-          if-no-files-found: error
-
-  package-universal:
-    name: Package Universal VSIX
-    needs: package
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Use Node.js 24.x
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.x
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Download better-sqlite3 native artifacts
-        uses: actions/download-artifact@v6
-        with:
-          path: native/better-sqlite3
-          pattern: better-sqlite3-*
-
-      - name: Arrange better-sqlite3 native binaries
-        shell: bash
-        run: |
-          mkdir -p native/better-sqlite3
-          for target in win32-x64 darwin-arm64 linux-x64 linux-arm64; do
-            mv "native/better-sqlite3/better-sqlite3-${target}/better_sqlite3.node" "native/better-sqlite3/better_sqlite3-${target}.node"
-          done
-          rmdir native/better-sqlite3/better-sqlite3-* 2>/dev/null || true
-
-      - name: Download tree-sitter WASM files
-        shell: bash
-        run: |
-          cd assets/tree-sitter
-          for i in 1 2 3; do
-            timeout 300 python download_wasm.py && break
-            echo "WASM download attempt $i failed, retrying..."
-            sleep 5
-          done
-
-      - name: Compile
-        run: pnpm run compile
-
-      - name: Package Universal VSIX
         run: pnpm exec vsce package
 
-      - name: Install cross-platform sqlite-vec packages
-        # Kept on npm deliberately: pnpm has no --no-save, and these four
-        # os/cpu-gated packages must all be present regardless of the host
-        # platform. They are copied into the vsix below and never enter
-        # package.json or the lockfile.
-        run: npm i --force --no-save sqlite-vec-darwin-arm64@0.1.7-alpha.2 sqlite-vec-linux-arm64@0.1.7-alpha.2 sqlite-vec-linux-x64@0.1.7-alpha.2 sqlite-vec-windows-x64@0.1.7-alpha.2
-
-      - name: Inject cross-platform sqlite-vec packages and dedupe better-sqlite3
-        shell: bash
-        run: |
-          VSIX_FILE=$(ls mutsumi-*.vsix | head -n 1)
-          mkdir -p vsix-unpacked
-          unzip -q "$VSIX_FILE" -d vsix-unpacked
-          rm -f "$VSIX_FILE"
-          for target in darwin-arm64 linux-arm64 linux-x64 windows-x64; do
-            cp -r "node_modules/sqlite-vec-${target}" "vsix-unpacked/extension/node_modules/"
-          done
-          # Remove duplicated better-sqlite3 binary: the linux-x64 build is already
-          # shipped as native/better-sqlite3/better_sqlite3-linux-x64.node and is
-          # loaded at runtime via the nativeBinding option, so the copy installed
-          # under node_modules is redundant in the universal package.
-          echo "Removing duplicate linux-x64 better_sqlite3.node from node_modules"
-          rm -f "vsix-unpacked/extension/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
-          cd vsix-unpacked
-          zip -rq ../mutsumi-universal.vsix .
-          cd ..
-          rm -rf vsix-unpacked
-
-      - name: Upload universal VSIX artifact
+      - name: Upload VSIX artifact
         uses: actions/upload-artifact@v6
         with:
           name: mutsumi-universal
           path: ./*.vsix
           if-no-files-found: error
 
-      - name: Delete intermediate better-sqlite3 artifacts
-        uses: geekyeggo/delete-artifact@v6
-        with:
-          name: better-sqlite3-*
-          useGlob: true
-          failOnError: false
-
   release:
     name: Create Release
-    needs: [package, package-universal]
+    needs: package
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -207,11 +91,11 @@ jobs:
           version=$(node -p "require('./package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Download all VSIX artifacts
+      - name: Download VSIX artifact
         uses: actions/download-artifact@v6
         with:
           path: artifacts
-          pattern: mutsumi-*
+          pattern: mutsumi-universal
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
@@ -220,8 +104,4 @@ jobs:
           name: Mutsumi v${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
-            artifacts/mutsumi-win32-x64/*.vsix
-            artifacts/mutsumi-darwin-arm64/*.vsix
-            artifacts/mutsumi-linux-x64/*.vsix
-            artifacts/mutsumi-linux-arm64/*.vsix
             artifacts/mutsumi-universal/*.vsix

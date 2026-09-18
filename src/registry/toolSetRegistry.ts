@@ -3,11 +3,9 @@
  * @module registry/toolSetRegistry
  */
 
-import * as vscode from "vscode";
 import type { ITool } from "../tools.d/interface";
 import { ToolRegistry } from "../tools.d/toolManager";
-import { type ToolSetsConfig, ToolSetDefinition } from "../config/interfaces";
-import { DEFAULT_MUTSUMI_CONFIG } from "../config/types";
+import { type ToolSetsConfig } from "../config/interfaces";
 
 /**
  * ToolSetRegistry manages named collections of tools.
@@ -59,10 +57,6 @@ export class ToolSetRegistry {
 	 * configuration. This is used during activation and again whenever the
 	 * `mutsumi.agentConfig` setting changes.
 	 *
-	 * The RAG tool 'query_codebase' is handled specially:
-	 * - If embedding endpoint is NOT configured, it's removed from all tool sets
-	 * - This allows the same config to work with or without RAG enabled
-	 *
 	 * @param {ToolSetsConfig} config - Tool set configuration mapping names to tool name arrays
 	 * @throws {Error} If a tool set references a non-existent tool
 	 */
@@ -70,27 +64,10 @@ export class ToolSetRegistry {
 		// Clear existing tool sets so a reload fully replaces prior state
 		this.toolSets.clear();
 
-		// Check if RAG is enabled (embedding endpoint configured)
-		const vscodeConfig = vscode.workspace.getConfiguration("mutsumi");
-		const embeddingEndpoint =
-			vscodeConfig.get<string>("embeddingEndpoint") ?? "";
-		const isRagEnabled = embeddingEndpoint.trim() !== "";
-
 		// Process each tool set
 		for (const [name, toolNames] of Object.entries(config)) {
-			// Clone and conditionally filter tool names
-			const processedToolNames = [...toolNames];
-
-			// Remove query_codebase if RAG is not enabled
-			if (!isRagEnabled) {
-				const ragToolIndex = processedToolNames.indexOf("query_codebase");
-				if (ragToolIndex !== -1) {
-					processedToolNames.splice(ragToolIndex, 1);
-				}
-			}
-
-			this.validateToolNames(processedToolNames, name);
-			this.toolSets.set(name, processedToolNames);
+			this.validateToolNames(toolNames, name);
+			this.toolSets.set(name, [...toolNames]);
 		}
 
 		// Mark the registry as ready for queries

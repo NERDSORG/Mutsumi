@@ -77,8 +77,6 @@ Before sending conversation history to OpenAI Compatible endpoints, you can prev
 
 <img width="1000" alt="Image" src="assets/DebugContext.gif" />
 
-Similarly, you can also preview RAG search results in advance.
-
 ### 🌘 Multi-Theme Compatibility
 
 Compatible with both dark and light themes, with bubble background colors changing automatically:
@@ -309,7 +307,7 @@ If you want to use a different model or provider, configure `mutsumi.providers` 
 Mutsumi provides rich built-in tools for intelligent task execution:
 
 - **File Operations** — `read`, `glob`
-- **Code Search** — `grep`, `find_filename`, `project_outline`, `query_codebase`
+- **Code Search** — `grep`, `find_filename`, `project_outline`
 - **Execution Control** — `shell`, `get_env_var`, `system_info`
 - **File Editing** — `write`, `edit`
 - **Agent Orchestration** — `dispatch_subagents`, `get_agent_types`, `task_finish`
@@ -380,8 +378,6 @@ This project uses the following open source projects and their license declarati
 | Project | Version | License | Purpose |
 |---------|---------|---------|---------|
 | [openai](https://github.com/openai/openai-node) | ^6.17.0 | Apache-2.0 | OpenAI API client |
-| [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) | ^12.8.0 | MIT | SQLite database engine |
-| [sqlite-vec](https://github.com/asg017/sqlite-vec) | ^0.1.7-alpha.2 | MIT | SQLite vector extension for RAG |
 | [diff](https://github.com/kpdecker/jsdiff) | ^8.0.3 | BSD-3-Clause | Text diff comparison |
 | [gray-matter](https://github.com/jonschlinkert/gray-matter) | ^4.0.3 | MIT | Markdown metadata parsing |
 | [preprocess](https://github.com/jsoverson/preprocess) | ^3.2.0 | Apache-2.0 | File preprocessor macros |

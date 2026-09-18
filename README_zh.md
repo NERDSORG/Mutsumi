@@ -77,8 +77,6 @@ Rules 或被引文件也可以使用 @[] schema 递归插入文件或预执行�
 
 <img width="1000" alt="Image" src="assets/DebugContext.gif" />
 
-同样的，也可以预先查看 RAG 搜索的结果。
-
 ### 🌘 多主题颜色兼容
 
 兼容深色主题和浅色主题，气泡底纹颜色自动变化：
@@ -309,7 +307,7 @@ Mutsumi 默认使用 `kimi-for-coding` 模型。你只需在 VS Code 设置中�
 Mutsumi 提供丰富的内置工具，支持智能任务执行：
 
 - **文件操作** — `read`, `glob`
-- **代码搜索** — `grep`, `find_filename`, `project_outline`, `query_codebase`
+- **代码搜索** — `grep`, `find_filename`, `project_outline`
 - **执行控制** — `shell`, `get_env_var`, `system_info`
 - **文件编辑** — `write`, `edit`
 - **Agent 编排** — `dispatch_subagents`, `get_agent_types`, `task_finish`
@@ -380,8 +378,6 @@ Mutsumi 采用六阶段动态上下文管理架构：
 | 项目 | 版本 | 许可证 | 用途 |
 |------|------|--------|------|
 | [openai](https://github.com/openai/openai-node) | ^6.17.0 | Apache-2.0 | OpenAI API 客户端 |
-| [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) | ^12.8.0 | MIT | SQLite 数据库引擎 |
-| [sqlite-vec](https://github.com/asg017/sqlite-vec) | ^0.1.7-alpha.2 | MIT | SQLite 向量扩展，用于 RAG |
 | [diff](https://github.com/kpdecker/jsdiff) | ^8.0.3 | BSD-3-Clause | 文本差异对比 |
 | [gray-matter](https://github.com/jonschlinkert/gray-matter) | ^4.0.3 | MIT | Markdown 元数据解析 |
 | [preprocess](https://github.com/jsoverson/preprocess) | ^3.2.0 | Apache-2.0 | 文件预处理器宏 |
