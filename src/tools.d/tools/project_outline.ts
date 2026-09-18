@@ -1,7 +1,7 @@
 import type { ITool, ToolContext } from "../interface";
 import { resolveUri, COMMON_IGNORE_GLOBS } from "../utils";
 import * as vscode from "vscode";
-import { CodebaseService } from "../../codebase/service";
+import { CodebaseService } from "../codebase/service";
 
 const MAX_FILES_TO_SCAN = 100;
 

@@ -18,7 +18,7 @@ import type { RenderBlock } from '../shared/renderTypes';
 import { ToolManager } from '../tools.d/toolManager';
 import { collectRulesRecursively } from '../contextManagement/prompts';
 import { SkillManager } from '../contextManagement/skillManager';
-import { McpRegistry } from '../mcp/registry';
+import { McpRegistry } from '../tools.d/mcp/registry';
 import { getModelsConfig } from '../utils';
 import { isAutoApproveEnabled } from './approvalManager';
 import type { ApprovalRequestManager } from './approvalManager';

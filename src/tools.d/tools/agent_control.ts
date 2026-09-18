@@ -1,5 +1,5 @@
 import { ITool, ToolContext } from '../interface';
-import { AgentTypeRegistry } from '../../registry/agentTypeRegistry';
+import { AgentTypeRegistry } from '../../agentTypes/registry/agentTypeRegistry';
 import { resolveUri } from '../utils';
 import { t } from '../../i18n';
 

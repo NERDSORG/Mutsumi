@@ -59,7 +59,7 @@ async function main() {
 	// The chat webview loads the bundle as an ES module inside the custom
 	// editor's webview.
 	const webviewCtx = await esbuild.context({
-		entryPoints: ["src/frontends/webview/ui/main.ts"],
+		entryPoints: ["src/frontend/frontends/webview/ui/main.ts"],
 		bundle: true,
 		format: "esm",
 		minify: production,

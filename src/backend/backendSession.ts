@@ -18,7 +18,7 @@ import * as vscode from 'vscode';
 import { v4 as uuidv4 } from 'uuid';
 import { createToolMessage } from '@moonshot-ai/kosong';
 import type { AgentMessage, AgentMetadata } from '../types';
-import type { McpToolSelection } from '../mcp/interfaces';
+import type { McpToolSelection } from '../tools.d/mcp/interfaces';
 import type { RenderData } from '../shared/renderTypes';
 import { RenderDataBuilder } from '../agent/renderDataBuilder';
 import { createEmptyToolSet, createToolSetForAgent, ToolSet } from '../tools.d/toolManager';

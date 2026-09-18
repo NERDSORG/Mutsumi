@@ -22,14 +22,15 @@ src/
 │   └── eventBus.ts        # 进程内类型化总线，方向分离
 ├── agent/             # 每次 run 的执行件：agentRunner / generateStream / renderDataBuilder / toolExecutor
 ├── frontend/          # 适配器框架（IFrontendAdapter + AdapterRegistry，DI 容器）
-├── frontends/
+├── frontend/frontends/
 │   ├── webview/       # WebView 宿主：webviewAdapter（单例）+ panelController（每面板）+ ui/（浏览器 bundle）
 │   └── lite/          # Lite 适配器：runOnce 一次性程序化运行，自动应答自己审批
 ├── contextManagement/ # 上下文装配：history.ts、ghostBlocks、templateEngine、prompts、skillManager
 ├── tools.d/           # 工具系统：toolManager、interface、edit_file（编辑事务）、tools/、preExecution
-├── config/ + registry/ # Agent 分角色系统（配置加载/校验/解析）
-├── mcp/               # MCP 宿主
-├── codebase/          # 代码库服务：Tree-sitter 大纲（project_outline 依赖）
+│   ├── mcp/           # MCP 宿主（McpRegistry + McpToolAdapter）
+│   └── codebase/      # 代码库服务：Tree-sitter 大纲（project_outline 依赖）
+├── agentTypes/        # Agent 分角色系统：配置加载/校验/解析（纯配置层）
+│   └── registry/      # 运行时注册表：AgentTypeRegistry / ToolSetRegistry（配置的运行时投影）
 ├── sidebar/           # 三个 TreeView：agent / approval / shellTask
 └── types.ts / utils.ts / i18n.ts / extension.ts
 ```
@@ -99,7 +100,7 @@ src/
 
 ---
 
-## 4. 前端（`src/frontend/` + `src/frontends/`）
+## 4. 前端（`src/frontend/`，含 `frontends/` 实现子目录）
 
 ### 4.1 适配器框架
 
@@ -107,7 +108,7 @@ src/
 - `IFrontendAdapter`：`id`、`capabilities.interactive`、`activate(ctx)`、`dispose()`；`AdapterContext = { bus, backend, extensionContext }`。
 - 总线永远是单一全局通道，路由靠 payload.sessionId，不搞 per-session channel。
 
-### 4.2 WebView 前端（`src/frontends/webview/`）
+### 4.2 WebView 前端（`src/frontend/frontends/webview/`）
 
 - 载体是 Custom Editor（`customEditors` 贡献点 viewType `mutsumi.chat`，selector `*.mtm`），`CustomReadonlyEditorProvider`——不提供文档模型，没有脏缓冲区状态。一个会话可挂多个面板（split）；关窗不杀会话，重开靠 `session.state` 水合。
 - **panelController.ts**（每面板一个）是进程间通信唯一关口：
@@ -122,7 +123,7 @@ src/
 - **上下文面板**：contextItems/rules/skills/MCP 工具的查看与开关。UI 形态是锚定在工具栏"上下文"按钮正上方的弹出面板（点击外部/Esc/再次点击按钮关闭），内容为多级可折叠树（目录树 + MCP server→tool 层级），状态图标用 codicon（check/dash/circle-outline），字体资源由 esbuild 从 `@vscode/codicons` 拷入 dist/ 并经 HTML `<link>` 引入。数据来自快照 + `session.metadata` 增量，操作发 FtB `context.*`。
 - **图片链路**：粘贴/拖入/工具栏插图 → RPC 上传 → 宿主写 `os.tmpdir()/mutsumi_images` → 插入 `![image](file://…)`；历史图片懒解析（`file://` img → RPC 换 webview URI）。
 
-### 4.3 Lite 适配器（`src/frontends/lite/`）
+### 4.3 Lite 适配器（`src/frontend/frontends/lite/`）
 
 无 UI、无工具（`createEmptyToolSet()`）、不可交互。`runOnce(prompt, {model, provider})`：ephemeral 会话 + 入队一条消息 + 订阅自己的 `session.output`/`session.status` 收敛文本；自动应答自己会话的审批。用途：程序化"发一条取结果"与后端冒烟测试。
 
@@ -147,7 +148,7 @@ history.ts 提供三个纯函数（持久化形态 ↔ 线协议形态的投影�
 
 ## 6. 配置 / 工具 / MCP
 
-- 配置流（`config/` + `registry/`）：整体校验候选 → 原子替换 → 仅 `mutsumi.mcpServers` 变化才重连 MCP。
+- 配置流（`agentTypes/`，含 `agentTypes/registry/`）：整体校验候选 → 原子替换 → 仅 `mutsumi.mcpServers` 变化才重连 MCP。
 - 工具链路：`createToolSetForAgent` 组合内置 + MCP 快照 ∩ 当前可用 + 子 Agent task_finish。MCP 工具不进 toolSets；`ToolSet.addTool` 拒绝重名。
 - MCP 宿主：单例 McpRegistry、无连接池/自动重连；`McpToolAdapter` readOnlyHint 自动执行，其余经 `session.requestApproval` 审批。
 

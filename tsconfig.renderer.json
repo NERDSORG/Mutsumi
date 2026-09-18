@@ -6,7 +6,7 @@
         "noEmit": true
     },
     "include": [
-        "src/frontends/webview/ui/**/*.ts",
+        "src/frontend/frontends/webview/ui/**/*.ts",
         "types/**/*.d.ts"
     ],
     "exclude": [

@@ -14,7 +14,7 @@ import { v4 as uuidv4 } from "uuid";
 import { AgentSidebarProvider } from "./sidebar/agentSidebar";
 import { activateEditSupport } from "./tools.d/edit_file";
 
-import { CodebaseService } from "./codebase/service";
+import { CodebaseService } from "./tools.d/codebase/service";
 import { SkillManager } from "./contextManagement/skillManager";
 import { t } from "./i18n";
 import { ToolRegistry } from "./tools.d/toolManager";
@@ -24,17 +24,17 @@ import { clearToolCache } from "./tools.d/cache";
 import { notifyApprovalNeeded } from "./notifications";
 
 // Agent Type System imports
-import { loadMutsumiConfig } from "./config/loader";
-import { ToolSetRegistry } from "./registry/toolSetRegistry";
-import { AgentTypeRegistry } from "./registry/agentTypeRegistry";
-import { getEntryAgentTypes } from "./config/resolver";
-import { McpRegistry } from "./mcp/registry";
+import { loadMutsumiConfig } from "./agentTypes/loader";
+import { ToolSetRegistry } from "./agentTypes/registry/toolSetRegistry";
+import { AgentTypeRegistry } from "./agentTypes/registry/agentTypeRegistry";
+import { getEntryAgentTypes } from "./agentTypes/resolver";
+import { McpRegistry } from "./tools.d/mcp/registry";
 
 // Backend + frontend framework
 import { AgentBackend } from "./backend/agentBackend";
 import { AdapterRegistry } from "./frontend/registry";
-import { LiteAdapter } from "./frontends/lite/liteAdapter";
-import { WebViewAdapter } from "./frontends/webview/webviewAdapter";
+import { LiteAdapter } from "./frontend/frontends/lite/liteAdapter";
+import { WebViewAdapter } from "./frontend/frontends/webview/webviewAdapter";
 import { initializeRules } from "./contextManagement/prompts";
 
 /**

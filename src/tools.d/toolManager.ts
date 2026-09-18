@@ -26,14 +26,14 @@ import { projectOutlineTool } from "./tools/project_outline";
 import { getWarningErrorTool } from "./tools/diagnostics";
 import { inspectShellTaskTool } from "./tools/inspect_shell_task";
 import { killShellTaskTool } from "./tools/kill_shell_task";
-import { AgentTypeRegistry } from "../registry/agentTypeRegistry";
-import { ToolSetRegistry } from "../registry/toolSetRegistry";
+import { AgentTypeRegistry } from "../agentTypes/registry/agentTypeRegistry";
+import { ToolSetRegistry } from "../agentTypes/registry/toolSetRegistry";
 import type { Tool } from "@moonshot-ai/kosong";
 import { getCachedResult, setCachedResult } from "./cache";
-import { McpRegistry } from "../mcp/registry";
-import { McpToolAdapter } from "../mcp/tool";
-import type { McpToolSelection } from "../mcp/interfaces";
-import { normalizeMcpToolSelections } from "../mcp/utils";
+import { McpRegistry } from "./mcp/registry";
+import { McpToolAdapter } from "./mcp/tool";
+import type { McpToolSelection } from "./mcp/interfaces";
+import { normalizeMcpToolSelections } from "./mcp/utils";
 
 // Re-export cache functions for convenience
 export { getToolCacheSize, clearToolCache } from "./cache";
