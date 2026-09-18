@@ -91,7 +91,7 @@ export class BackendSession {
         this.metadata = metadata;
         this.history = history;
         this.fileUri = fileUri;
-        this.maxLoops = options?.maxLoops ?? 30;
+        this.maxLoops = options?.maxLoops ?? 200;
         this.emptyToolSet = options?.emptyToolSet ?? false;
     }
 
