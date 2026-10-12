@@ -76,12 +76,6 @@ export class InputArea {
         this.queueBar.className = 'mutsumi-queue-bar';
         root.appendChild(this.queueBar);
 
-        // Toolbar row (registry buttons; popup anchors live here)
-        const toolbarRow = document.createElement('div');
-        toolbarRow.className = 'mutsumi-toolbar-row';
-        toolbarRow.appendChild(buildToolbar(ctx));
-        root.appendChild(toolbarRow);
-
         // Rename row (toggled by the toolbar button)
         const renameRow = document.createElement('div');
         renameRow.className = 'mutsumi-rename-row';
@@ -137,9 +131,14 @@ export class InputArea {
         inputWrap.appendChild(this.textarea);
         root.appendChild(inputWrap);
 
-        // Action row: send-mode picker button + interrupt + send
+        // Action row: toolbar buttons on the left, then a flexible spacer,
+        // then the send-mode picker, interrupt, and send on the right.
         const actionRow = document.createElement('div');
         actionRow.className = 'mutsumi-action-row';
+        actionRow.appendChild(buildToolbar(ctx));
+        const spacer = document.createElement('div');
+        spacer.className = 'mutsumi-action-spacer';
+        actionRow.appendChild(spacer);
         this.modeButton = document.createElement('button');
         this.modeButton.type = 'button';
         this.modeButton.className = 'mutsumi-mode-button';

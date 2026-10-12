@@ -424,14 +424,6 @@ body {
   white-space: nowrap;
 }
 
-.mutsumi-toolbar-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-}
-
 .mutsumi-toolbar-buttons {
   display: flex;
   gap: 4px;
@@ -554,7 +546,10 @@ body[data-auto-approve="true"] .mutsumi-toolbar-item[data-toolbar-id="autoApprov
   align-items: center;
   gap: 8px;
   margin-top: 6px;
-  justify-content: flex-end;
+}
+
+.mutsumi-action-spacer {
+  flex: 1;
 }
 
 .mutsumi-mode-button {
