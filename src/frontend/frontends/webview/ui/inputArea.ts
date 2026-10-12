@@ -108,10 +108,16 @@ export class InputArea {
         renameRow.appendChild(renameConfirm);
         root.appendChild(renameRow);
 
-        // Attachment preview bar
+        // Composer card ("fake floating island"): attachment bar, input box,
+        // and action row share one rounded border and background.
+        const composer = document.createElement('div');
+        composer.className = 'mutsumi-composer';
+        root.appendChild(composer);
+
+        // Attachment preview bar (inside the card, above the input)
         this.attachBar = document.createElement('div');
         this.attachBar.className = 'mutsumi-attach-bar';
-        root.appendChild(this.attachBar);
+        composer.appendChild(this.attachBar);
 
         // Input box: highlight pre under a transparent textarea
         const inputWrap = document.createElement('div');
@@ -139,7 +145,7 @@ export class InputArea {
         this.textarea.addEventListener('dragover', (e) => e.preventDefault());
         inputWrap.appendChild(this.highlightPre);
         inputWrap.appendChild(this.textarea);
-        root.appendChild(inputWrap);
+        composer.appendChild(inputWrap);
 
         // Action row: toolbar buttons on the left, then a flexible spacer,
         // then the send-mode picker, interrupt, and send on the right.
@@ -178,7 +184,7 @@ export class InputArea {
         this.sendButton.appendChild(buttonIcon('arrow-up'));
         this.sendButton.addEventListener('click', () => this.send());
         actionRow.appendChild(this.sendButton);
-        root.appendChild(actionRow);
+        composer.appendChild(actionRow);
 
         container.appendChild(root);
         this.refreshModeButton();

@@ -402,8 +402,17 @@ body {
 /* --- Input area --- */
 .mutsumi-input-container {
   flex: none;
-  border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.3));
   padding: 8px 16px 12px;
+}
+
+/* Composer card ("fake floating island"): one rounded border + the default
+   input background for the attachment bar, input box, and action row. It
+   stays in normal flow (never overlaps the transcript), and deliberately has
+   no overflow/stacking-context so anchored popups keep opening upward. */
+.mutsumi-composer {
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128,128,128,0.4)));
+  border-radius: 10px;
 }
 
 .mutsumi-queue-bar {
@@ -482,7 +491,7 @@ body[data-auto-approve="true"] .mutsumi-toolbar-item[data-toolbar-id="autoApprov
 .mutsumi-attach-bar {
   display: flex;
   gap: 6px;
-  margin-bottom: 6px;
+  padding: 10px 12px 0;
   flex-wrap: wrap;
 }
 
@@ -494,12 +503,10 @@ body[data-auto-approve="true"] .mutsumi-toolbar-item[data-toolbar-id="autoApprov
   border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.3));
 }
 
+/* Positioning context for the highlight overlay; the composer card owns the
+   border and background now. */
 .mutsumi-input-wrap {
   position: relative;
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128,128,128,0.4)));
-  border-radius: 8px;
-  background: var(--vscode-input-background);
-  min-height: 68px;
 }
 
 .mutsumi-input-highlight,
@@ -548,7 +555,7 @@ body[data-auto-approve="true"] .mutsumi-toolbar-item[data-toolbar-id="autoApprov
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  padding: 2px 6px 8px;
 }
 
 .mutsumi-action-spacer {
