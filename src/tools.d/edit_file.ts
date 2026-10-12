@@ -26,6 +26,41 @@ interface EditTransactionState {
 }
 
 // ============================================================================
+// Approval diff - inline unified diff for the approval card
+// ============================================================================
+
+/** Max unified-diff lines embedded in an approval request's `details`. */
+const APPROVAL_DIFF_MAX_LINES = 300;
+
+/**
+ * Build the unified diff rendered inline on the approval card (on-disk
+ * original vs. proposed content). Returns undefined when nothing changes.
+ */
+function buildApprovalDiff(
+	uri: vscode.Uri,
+	originalContent: string,
+	newContent: string,
+): string | undefined {
+	const fileName = path.posix.basename(uri.path);
+	let patch = Diff.createTwoFilesPatch(
+		`a/${fileName}`,
+		`b/${fileName}`,
+		originalContent,
+		newContent,
+	);
+	if (!patch.includes("@@")) {
+		return undefined; // Header lines only: contents are identical.
+	}
+	const lines = patch.split("\n");
+	if (lines.length > APPROVAL_DIFF_MAX_LINES) {
+		patch =
+			lines.slice(0, APPROVAL_DIFF_MAX_LINES).join("\n") +
+			`\n${t("approval.edit.diffTruncated", lines.length - APPROVAL_DIFF_MAX_LINES)}`;
+	}
+	return patch;
+}
+
+// ============================================================================
 // TempFileHandler - Manages temporary file operations
 // ============================================================================
 
@@ -440,13 +475,19 @@ class EditTransactionManager {
 					// Register transaction
 					this.transactions.set(uriKey, transaction);
 
-					// Request approval through the session's backend path. The diff
-					// editor opens only when the user triggers the custom action.
+					// Request approval through the session's backend path. The
+					// approval card renders `details` as an inline diff; the
+					// full diff editor still opens on demand via the custom
+					// action. The on-disk file stays untouched until approval,
+					// so reading it now yields the diff's old side.
+					const originalContent = new TextDecoder().decode(
+						await vscode.workspace.fs.readFile(uri),
+					);
 					const { requestId, promise } = context.session.requestApprovalWithAction({
 						toolName,
 						actionDescription: t("approval.edit.action", path.basename(uri.path)),
 						targetUri: uri.toString(),
-						details: t("approval.edit.details"),
+						details: buildApprovalDiff(uri, originalContent, newContent),
 						customAction: {
 							label: t("approval.edit.customAction"),
 							localOnly: true,

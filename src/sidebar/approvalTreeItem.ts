@@ -40,7 +40,11 @@ export class ApprovalTreeItem extends vscode.TreeItem {
         }
 
         if (info.details) {
-            md.appendMarkdown(t('approval.details', info.details));
+            // edit/write details carry a full unified diff; keep hovers small.
+            const details = info.details.length > 1000
+                ? `${info.details.slice(0, 1000)}\n…`
+                : info.details;
+            md.appendMarkdown(t('approval.details', details));
         }
         md.appendMarkdown(t('approval.time', new Date(info.timestamp).toLocaleString()) + `\n\n`);
         md.appendMarkdown(t('approval.status', this.getStatusText()));
@@ -90,17 +94,20 @@ export function registerApprovalCommands(context: vscode.ExtensionContext, bus: 
                 return;
             }
             // Rejection reason is collected here (frontend) and carried by the
-            // FtB payload; empty or cancelled input rejects without a reason,
-            // which terminates the session (backend semantics).
+            // FtB payload. Esc cancels without responding; an empty submitted
+            // reason rejects bare, which interrupts the run (backend semantics).
             const reason = await vscode.window.showInputBox({
                 prompt: t('permission.rejectPrompt', item.record.info.toolName),
                 placeHolder: t('permission.rejectPlaceHolder'),
             });
+            if (reason === undefined) {
+                return; // Esc: leave the request pending
+            }
             bus.emitFtB('approval.respond', {
                 sessionId: item.record.info.sessionId,
                 requestId: item.record.info.id,
                 outcome: 'reject',
-                reason: reason ?? undefined,
+                reason: reason.trim() || undefined,
                 origin: 'sidebar',
             });
         })

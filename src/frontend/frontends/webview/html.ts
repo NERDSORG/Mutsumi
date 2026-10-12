@@ -32,7 +32,7 @@ export function buildWebviewLabels(): Record<string, string> {
         'chat.contextPanel': t('chat.contextPanel'),
         'chat.approve': t('chat.approve'),
         'chat.reject': t('chat.reject'),
-        'chat.rejectWithReason': t('chat.rejectWithReason'),
+        'chat.rejectSubmit': t('chat.rejectSubmit'),
         'chat.rejectReasonPlaceholder': t('chat.rejectReasonPlaceholder'),
         'chat.sessionDeleted': t('chat.sessionDeleted'),
         'chat.debugResultTitle': t('chat.debugResultTitle'),

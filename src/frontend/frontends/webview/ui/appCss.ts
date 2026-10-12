@@ -333,6 +333,35 @@ body {
   white-space: pre-wrap;
 }
 
+/* Unified diff block (edit/write approval details). Overrides the flat
+   pre-wrap above so colored lines span the full width. */
+.mutsumi-diff {
+  padding: 4px 0;
+  white-space: pre;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.mutsumi-diff > div {
+  padding: 0 8px;
+}
+
+.mutsumi-diff-add {
+  background: var(--vscode-diffEditor-insertedLineBackground, rgba(46, 160, 67, 0.18));
+}
+
+.mutsumi-diff-del {
+  background: var(--vscode-diffEditor-removedLineBackground, rgba(248, 81, 73, 0.18));
+}
+
+.mutsumi-diff-hunk {
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editor-lineHighlightBackground, rgba(128, 128, 128, 0.08));
+}
+
+.mutsumi-diff-meta {
+  color: var(--vscode-descriptionForeground);
+}
+
 .mutsumi-approval-buttons {
   display: flex;
   gap: 8px;
