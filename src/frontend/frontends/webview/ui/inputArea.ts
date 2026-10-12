@@ -52,6 +52,7 @@ export interface InputAreaCallbacks {
 const IMG_LINK_REGEX = /!\[[^\]]*\]\((file:\/\/[^)\s]+)\)/g;
 
 export class InputArea {
+    private readonly rootEl: HTMLElement;
     private readonly textarea: HTMLTextAreaElement;
     private readonly highlightPre: HTMLElement;
     private readonly queueBar: HTMLElement;
@@ -70,6 +71,7 @@ export class InputArea {
     ) {
         const root = document.createElement('div');
         root.className = 'mutsumi-input-root';
+        this.rootEl = root;
 
         // Queue bar
         this.queueBar = document.createElement('div');
@@ -173,7 +175,8 @@ export class InputArea {
 
     /** Refresh status-dependent widgets from state. */
     update(state: ChatState): void {
-        this.interruptButton.style.display = state.status === 'running' ? '' : 'none';
+        // Fact source for the declarative send/interrupt swap (CSS holds the policy).
+        this.rootEl.dataset.agentRunning = String(state.status === 'running');
         document.body.dataset.autoApprove = String(state.autoApproveEnabled);
 
         // Queue bar
@@ -263,6 +266,9 @@ export class InputArea {
 
     private syncHighlight(): void {
         this.highlightPre.innerHTML = highlightMarkdownSource(this.textarea.value) + '\n';
+        // Fact source for the declarative send/interrupt swap: every text
+        // mutation path funnels through here (typing, send, fill, setText).
+        this.rootEl.dataset.inputEmpty = String(this.textarea.value.trim() === '');
         void this.refreshAttachments();
     }
 

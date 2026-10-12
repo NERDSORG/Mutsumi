@@ -600,13 +600,26 @@ body.vscode-light {
   background: var(--vscode-button-background);
 }
 
-.mutsumi-send-button:hover,
-.mutsumi-interrupt-button:hover {
+/* Interrupt intentionally has no hover state: it keeps its error color. */
+.mutsumi-send-button:hover {
   background: var(--vscode-button-hoverBackground);
 }
 
+/* Declarative send/interrupt swap: JS maintains data-agent-running and
+   data-input-empty on .mutsumi-input-root; these rules are the whole
+   visibility policy. Default branch: send visible, interrupt hidden. */
 .mutsumi-interrupt-button {
+  display: none;
   background: var(--vscode-inputValidation-errorBackground, #a1260d);
+}
+
+/* Agent running with an empty input: swap the send button for interrupt. */
+.mutsumi-input-root[data-agent-running="true"][data-input-empty="true"] .mutsumi-interrupt-button {
+  display: block;
+}
+
+.mutsumi-input-root[data-agent-running="true"][data-input-empty="true"] .mutsumi-send-button {
+  display: none;
 }
 
 /* --- Debug overlay --- */
