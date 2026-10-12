@@ -20,8 +20,10 @@ export type { ApprovalRequestInfo, ContextPanelData, RenderData, SessionSnapshot
 /** Everything a component needs to act on the session. */
 export interface UiContext {
     sendFtB: typeof sendFtB;
-    /** Fill the input box with text (withdraw action). */
+    /** Insert text at the input cursor (image links, other snippets). */
     fillInput: (text: string) => void;
+    /** Replace the whole input text (withdraw action). */
+    setText: (text: string) => void;
     label: (key: string) => string;
 }
 

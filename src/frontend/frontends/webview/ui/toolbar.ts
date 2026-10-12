@@ -72,7 +72,7 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
     {
         id: 'autoApprove',
         labelKey: 'chat.autoApprove',
-        icon: 'run-all',
+        icon: 'check-all',
         run: (ctx) => {
             const current = document.body.dataset.autoApprove === 'true';
             ctx.sendFtB('settings.setAutoApprove', { enabled: !current });
@@ -87,7 +87,7 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
     {
         id: 'sessionSettings',
         labelKey: 'chat.sessionSettings',
-        icon: 'hubot',
+        icon: 'chip',
         popupId: 'sessionSettings',
     },
 ];

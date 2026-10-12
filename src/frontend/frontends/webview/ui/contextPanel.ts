@@ -59,7 +59,7 @@ export class ContextPanel extends AnchoredPopup {
         const agentType = this.state?.metadata?.agentType;
         if (agentType) {
             this.rootEl.appendChild(this.leafRow({
-                icon: 'robot',
+                icon: 'account',
                 label: agentType,
                 readOnly: true,
             }));

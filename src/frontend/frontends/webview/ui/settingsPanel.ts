@@ -44,7 +44,7 @@ export class SettingsPanel extends AnchoredPopup {
         }
 
         // --- Model section ---
-        this.rootEl.appendChild(this.sectionHeader('hubot', this.ctx.label('chat.selectModel')));
+        this.rootEl.appendChild(this.sectionHeader('chip', this.ctx.label('chat.selectModel')));
         const currentPair = metadata.model && metadata.provider
             ? `${metadata.provider}::${metadata.model}`
             : '';
@@ -66,7 +66,7 @@ export class SettingsPanel extends AnchoredPopup {
         }, () => this.render());
 
         // --- Reasoning effort section ---
-        this.rootEl.appendChild(this.sectionHeader('sparkle', this.ctx.label('chat.reasoningEffort')));
+        this.rootEl.appendChild(this.sectionHeader('lightbulb', this.ctx.label('chat.reasoningEffort')));
         const currentEffort = metadata.reasoning_effort ?? 'default';
         const effortGroups: PickerGroup[] = [{
             id: 'effort',

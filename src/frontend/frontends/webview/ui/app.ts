@@ -56,7 +56,8 @@ export class App {
         this.ctx = {
             label,
             sendFtB: (name, payload) => sendFtB(name, { ...payload, sessionId }),
-            fillInput: (text) => this.inputArea.setText(text),
+            fillInput: (text) => this.inputArea.fillInput(text),
+            setText: (text) => this.inputArea.setText(text),
         };
         this.state = {
             metadata: null,

@@ -58,7 +58,7 @@ export const MESSAGE_MENUS: MessageMenuItem[] = [
         icon: 'reply',
         run: (ctx, turn) => {
             ctx.sendFtB('history.truncate', { fromIndex: turn.messageIndex });
-            ctx.fillInput(turn.userText ?? '');
+            ctx.setText(turn.userText ?? '');
         },
     },
     {
