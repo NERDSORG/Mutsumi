@@ -303,12 +303,18 @@ body {
   padding: 0 16px;
 }
 
+/* Mirrors VSCode's own chat confirmation widget
+   (.chat-confirmation-widget2): hairline input border, no fill of its own,
+   and focus reported on the border instead of a permanent colored ring. */
 .mutsumi-approval-card {
-  border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
-  border-radius: 8px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-chat-requestBorder, transparent));
+  border-radius: var(--vscode-cornerRadius-large, 10px);
   padding: 10px 14px;
   margin: 8px 0;
-  background: var(--vscode-editor-inactiveSelectionBackground, rgba(128,128,128,0.12));
+}
+
+.mutsumi-approval-card:focus-within {
+  border-color: var(--vscode-focusBorder, var(--vscode-input-border, transparent));
 }
 
 .mutsumi-approval-title {
