@@ -51,6 +51,14 @@ export interface InputAreaCallbacks {
 
 const IMG_LINK_REGEX = /!\[[^\]]*\]\((file:\/\/[^)\s]+)\)/g;
 
+/** Codicon glyph for an icon-only button (the button carries the label). */
+function buttonIcon(name: string): HTMLElement {
+    const el = document.createElement('span');
+    el.className = `codicon codicon-${name}`;
+    el.setAttribute('aria-hidden', 'true');
+    return el;
+}
+
 export class InputArea {
     private readonly rootEl: HTMLElement;
     private readonly textarea: HTMLTextAreaElement;
@@ -144,9 +152,7 @@ export class InputArea {
         this.modeButton = document.createElement('button');
         this.modeButton.type = 'button';
         this.modeButton.className = 'mutsumi-mode-button';
-        const modeChevron = document.createElement('span');
-        modeChevron.className = 'codicon codicon-chevron-up';
-        this.modeButton.appendChild(modeChevron);
+        this.modeButton.appendChild(buttonIcon('chevron-up'));
         actionRow.appendChild(this.modeButton);
         this.modePicker = new ModePickerPopup(this.modeButton, (id) => {
             this.sendMode = id as SendMode;
@@ -156,14 +162,20 @@ export class InputArea {
         this.interruptButton = document.createElement('button');
         this.interruptButton.type = 'button';
         this.interruptButton.className = 'mutsumi-interrupt-button';
-        this.interruptButton.textContent = ctx.label('chat.interrupt');
+        const interruptLabel = ctx.label('chat.interrupt');
+        this.interruptButton.title = interruptLabel;
+        this.interruptButton.setAttribute('aria-label', interruptLabel);
+        this.interruptButton.appendChild(buttonIcon('primitive-square'));
         this.interruptButton.addEventListener('click', () => this.callbacks.onInterrupt());
         actionRow.appendChild(this.interruptButton);
 
         this.sendButton = document.createElement('button');
         this.sendButton.type = 'button';
         this.sendButton.className = 'mutsumi-send-button';
-        this.sendButton.textContent = ctx.label('chat.send');
+        const sendLabel = ctx.label('chat.send');
+        this.sendButton.title = sendLabel;
+        this.sendButton.setAttribute('aria-label', sendLabel);
+        this.sendButton.appendChild(buttonIcon('arrow-up'));
         this.sendButton.addEventListener('click', () => this.send());
         actionRow.appendChild(this.sendButton);
         root.appendChild(actionRow);

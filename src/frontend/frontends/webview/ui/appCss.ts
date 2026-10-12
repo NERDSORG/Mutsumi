@@ -529,7 +529,10 @@ body[data-auto-approve="true"] .mutsumi-toolbar-item[data-toolbar-id="autoApprov
   box-sizing: border-box;
   border: none;
   outline: none;
-  resize: vertical;
+  resize: none;
+  /* Auto-grow with content between the min/max-height clamps below; once the
+     max-height cap is reached the textarea scrolls internally as before. */
+  field-sizing: content;
   background: transparent;
   color: transparent;
   caret-color: var(--vscode-editor-foreground);
@@ -590,11 +593,18 @@ body.vscode-light {
   color-scheme: light;
 }
 
+/* Circular icon buttons: the codicon glyph is centered inside a CSS-drawn
+   circle; background/foreground stay on the shared button variables. */
 .mutsumi-send-button,
 .mutsumi-interrupt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: none;
-  border-radius: 4px;
-  padding: 5px 16px;
+  border-radius: 50%;
   cursor: pointer;
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
@@ -613,9 +623,10 @@ body.vscode-light {
   background: var(--vscode-inputValidation-errorBackground, #a1260d);
 }
 
-/* Agent running with an empty input: swap the send button for interrupt. */
+/* Agent running with an empty input: swap the send button for interrupt.
+   Matches the base rule's inline-flex so the glyph stays centered. */
 .mutsumi-input-root[data-agent-running="true"][data-input-empty="true"] .mutsumi-interrupt-button {
-  display: block;
+  display: inline-flex;
 }
 
 .mutsumi-input-root[data-agent-running="true"][data-input-empty="true"] .mutsumi-send-button {
