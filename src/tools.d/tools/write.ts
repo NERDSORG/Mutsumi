@@ -22,7 +22,7 @@ export const createOrReplaceTool: ITool = {
         return handleEdit(args.uri, args.new_content, context, 'write');
     },
     prettyPrint: (args: any) => {
-        return `📝 Mutsumi created/replaced ${args.uri || '(unknown file)'}`;
+        return `$(new-file) Mutsumi created/replaced ${args.uri || '(unknown file)'}`;
     },
     argsToCodeBlock: ['new_content'],
     codeBlockFilePaths: ['uri']

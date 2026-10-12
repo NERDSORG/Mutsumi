@@ -32,12 +32,30 @@ body {
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
+  /* Height of the scroll-away fade at the bottom of the transcript. */
+  --mutsumi-fade: 20px;
+}
+
+/* The transcript dissolves into the page background instead of being cut off
+   at the scroller's edge. The strip is exactly as tall as the scroller's own
+   bottom padding, so the newest line is never faded when scrolled to the
+   bottom; it only fades content that scrolls up behind it. */
+.mutsumi-main::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--mutsumi-fade);
+  background: linear-gradient(to bottom, transparent, var(--vscode-editor-background));
+  pointer-events: none;
 }
 
 .mutsumi-flow {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 12px 16px var(--mutsumi-fade);
   min-width: 0;
 }
 
@@ -297,6 +315,25 @@ body {
   opacity: 1;
 }
 
+/* --- Inline label icons --- */
+/* codicon.css ships a fixed 16px glyph; inline in a label it has to follow
+   the surrounding text size instead. */
+.mutsumi-label-icon {
+  font-size: 1em;
+  vertical-align: text-bottom;
+  margin-right: 6px;
+}
+
+/* Same glyph and color as the sidebar's pending-approval row
+   (ThemeIcon('question', charts.yellow)). */
+.mutsumi-approval-icon {
+  color: var(--vscode-charts-yellow, #cca700);
+}
+
+.mutsumi-error-icon {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
 /* --- Approvals --- */
 .mutsumi-approvals {
   flex: none;
@@ -409,12 +446,6 @@ body {
   padding: 4px 8px;
 }
 
-.mutsumi-dispatch-list {
-  margin: 6px 0;
-  padding-left: 20px;
-  font-size: 0.9em;
-}
-
 /* --- Error banner --- */
 .mutsumi-error-banner {
   border: 1px solid var(--vscode-inputValidation-errorBorder, #f48771);
@@ -457,12 +488,28 @@ body {
   margin-bottom: 6px;
 }
 
+/* Same surface + hairline as the composer island: queued messages read as
+   smaller siblings of the input area. The old selection-token wash (and the
+   blanket opacity that muddied both text and border) are gone. */
 .mutsumi-queue-chip {
-  background: var(--vscode-editor-inactiveSelectionBackground, rgba(128,128,128,0.15));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128,128,128,0.4)));
   border-radius: 6px;
   padding: 4px 10px;
   font-size: 0.85em;
-  opacity: 0.85;
+}
+
+.mutsumi-chip-icon {
+  font-size: 1em;
+  opacity: 0.75;
+  flex: none;
+}
+
+/* The message text is its own region so the chip never truncates mid-glyph. */
+.mutsumi-chip-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

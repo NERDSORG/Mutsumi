@@ -15,20 +15,56 @@ export const RENDERER_CSS = `
   margin: 4px 0;
 }
 
-/* Themed container replacement for tool calls and reasoning */
+/* Flat, VSCode-style: tool calls and reasoning own no surface at all — no
+   background, no hairline, no shrink-wrap. They span the turn width, so
+   expanding changes height only; the nested <pre> blocks stay the only visual
+   structure. */
 .mutsumi-block > details {
-  background-color: var(--vscode-editor-inactiveSelectionBackground, rgba(128, 128, 128, 0.15));
-  padding: 12px 16px;
-  border-radius: 8px;
+  /* Flat rows still need breathing room around the summary line. */
+  padding: 6px 0;
   margin: 8px 0;
-  width: fit-content;
-  max-width: 90%;
+  /* Lets block-size animate to/from auto (see the ::details-content rules). */
+  interpolate-size: allow-keywords;
 }
 
 .mutsumi-block > details > summary {
   cursor: pointer;
   font-weight: 500;
   user-select: none;
+  /* Drop the native disclosure triangle; the pointer cursor carries the
+     affordance. Both forms are needed: the standard property, plus the
+     Chromium pseudo-element for older engines. */
+  list-style: none;
+}
+
+.mutsumi-block > details > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The leading icon is a quiet gutter marker, as in VSCode's own tool parts. */
+.mutsumi-block > details > summary .codicon {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Expand/collapse animation, pure CSS: ::details-content is the engine's own
+   wrapper around everything but the summary, so no DOM change is needed.
+   Engines without the pseudo-element (or without interpolate-size) simply
+   keep the instant toggle. Timings mirror VSCode's own collapsible parts. */
+.mutsumi-block > details::details-content {
+  content-visibility: hidden;
+  block-size: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    block-size .18s cubic-bezier(.2, 0, 0, 1),
+    opacity .14s cubic-bezier(.2, 0, 0, 1),
+    content-visibility .18s allow-discrete;
+}
+
+.mutsumi-block > details[open]::details-content {
+  content-visibility: visible;
+  block-size: auto;
+  opacity: 1;
 }
 
 .mutsumi-tool-args {
@@ -93,13 +129,6 @@ export const RENDERER_CSS = `
   opacity: 1;
 }
 
-.mutsumi-copy-code > svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-  pointer-events: none;
-}
-
 body.vscode-high-contrast .mutsumi-block pre > .mutsumi-copy-code,
 body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
   border-color: var(--vscode-contrastBorder, transparent);
@@ -123,9 +152,15 @@ body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
   font-size: var(--vscode-editor-font-size, 13px);
 }
 
+/* Expanded reasoning gets a bare frame (no fill) so it reads as an aside
+   rather than as another paragraph of the answer. Same hairline language as
+   the composer island and the queue chip. */
 .mutsumi-reasoning-content {
   margin-top: 8px;
   opacity: 0.85;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.4)));
+  border-radius: 6px;
+  padding: 6px 12px;
 }
 
 /* Content blocks: render markdown output */

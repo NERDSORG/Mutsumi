@@ -6,6 +6,7 @@
 
 import { AnchoredPopup, renderPickerGroups } from './popup';
 import type { PickerGroup } from './popup';
+import { codicon } from './codicon';
 import type { ChatState, UiContext } from './types';
 
 /** Reasoning effort setting values (display order; 'default' clears the override). */
@@ -86,9 +87,7 @@ export class SettingsPanel extends AnchoredPopup {
     private sectionHeader(icon: string, label: string): HTMLElement {
         const header = document.createElement('div');
         header.className = 'mutsumi-settings-section-header';
-        const iconEl = document.createElement('span');
-        iconEl.className = `codicon codicon-${icon}`;
-        header.appendChild(iconEl);
+        header.appendChild(codicon(icon));
         const labelEl = document.createElement('span');
         labelEl.textContent = label;
         header.appendChild(labelEl);

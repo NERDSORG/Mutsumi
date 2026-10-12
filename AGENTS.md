@@ -122,6 +122,7 @@ src/
 - **弹出层基类**：`ui/popup.ts` 的 `AnchoredPopup`（锚定按钮上方定位、toggle/Esc/外部点击关闭）+ `renderPickerGroups`（可折叠分组 + codicon 勾选行）共享渲染；`ContextPanel` 与 `SettingsPanel` 均继承基类。
 - **上下文面板**：contextItems/rules/skills/MCP 工具的查看与开关。UI 形态是锚定在工具栏"上下文"按钮正上方的弹出面板（点击外部/Esc/再次点击按钮关闭），内容为多级可折叠树（目录树 + MCP server→tool 层级），状态图标用 codicon（check/dash/circle-outline），字体资源由 esbuild 从 `@vscode/codicons` 拷入 dist/ 并经 HTML `<link>` 引入。数据来自快照 + `session.metadata` 增量，操作发 FtB `context.*`。
 - **图片链路**：粘贴/拖入/工具栏插图 → RPC 上传 → 宿主写 `os.tmpdir()/mutsumi_images` → 插入 `![image](file://…)`；历史图片懒解析（`file://` img → RPC 换 webview URI）。
+- **图标规则**（`ui/codicon.ts`）：结构性图标统一经 `codicon(name, cls?)` 工厂构造（全 webview 单一出口，禁止各自拼 span）。**图标永远是独立元素**；唯一允许"长在字符串里"的图标，是后端工具 `prettyPrint` 开头的 `$(name) `（工具卡片 summary，`ui/render/renderCore.ts` 单点解析）——前端自造 DOM 一律用工厂，不进字符串解析。markdown 正文（AI/思考/用户气泡）与全部逐字 sink（diff、工具参数与结果、debug context、URI、含用户原文的 chip）**永不解析**。含数据的标签用"分区"而非拼串：图标元素 + 数据文本节点（流式 spinner、队列 chip 均如此）。图标名须能在已加载的 `codicon.css` 中验证（按名探测其 `::before` 计算内容，与资源源无关，结果缓存），未知名字或探测不到 → 整串按字面量渲染：失败方向永远是"少一个图标"，绝不是"文字消失"。l10n 字符串一律不带图标（它们共享给 sidebar/通知等无法渲染图标的位置），需要图标时由消费方自挂。
 
 ### 4.3 Lite 适配器（`src/frontend/frontends/lite/`）
 

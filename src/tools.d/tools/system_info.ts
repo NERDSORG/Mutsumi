@@ -244,7 +244,7 @@ export const systemInfoTool: ITool = {
         }
     },
     prettyPrint: (_args: any) => {
-        return `💻 Mutsumi checked system info`;
+        return `$(device-desktop) Mutsumi checked system info`;
     }
     // shouldCache is intentionally omitted: the intermediate SystemInfoData is cached above,
     // so the formatted string can be regenerated cheaply without a second layer of caching.
@@ -274,6 +274,6 @@ export const getEnvVarTool: ITool = {
         return value;
     },
     prettyPrint: (args: any) => {
-        return `🔧 Mutsumi read environment variable '${args.name || '(unknown)}'}`;
+        return `$(wrench) Mutsumi read environment variable '${args.name || '(unknown)}'}`;
     }
 };

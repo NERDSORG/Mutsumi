@@ -8,8 +8,9 @@
 import { App } from './app';
 import { APP_CSS } from './appCss';
 import { RENDERER_CSS } from './render/css';
-import { installCopyCodeHandler } from './render/renderCore';
+import { installCopyCodeHandler, configureRendererLabels } from './render/renderCore';
 import { getInitialData, onHostMessage, signalReady } from './bridge';
+import { makeLabeler } from './types';
 
 function installStyles(): void {
     const style = document.createElement('style');
@@ -22,6 +23,7 @@ function main(): void {
     installCopyCodeHandler();
 
     const { sessionId, labels } = getInitialData();
+    configureRendererLabels(makeLabeler(labels));
 
     const root = document.createElement('div');
     root.id = 'mutsumi-root';

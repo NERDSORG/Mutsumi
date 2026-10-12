@@ -10,6 +10,7 @@
  * @module frontend/frontends/webview/ui/popup
  */
 
+import { codicon } from './codicon';
 import type { ChatState } from './types';
 
 /** A popup whose content derives from chat state. */
@@ -137,13 +138,10 @@ export function renderPickerGroups(
         if (group.label) {
             const header = document.createElement('div');
             header.className = 'mutsumi-picker-group-header';
-            const chevron = document.createElement('span');
-            chevron.className = `codicon ${collapsedGroups.has(group.id) ? 'codicon-chevron-right' : 'codicon-chevron-down'}`;
+            const chevron = codicon(collapsedGroups.has(group.id) ? 'chevron-right' : 'chevron-down');
             header.appendChild(chevron);
             if (group.icon) {
-                const iconEl = document.createElement('span');
-                iconEl.className = `codicon codicon-${group.icon} mutsumi-picker-group-icon`;
-                header.appendChild(iconEl);
+                header.appendChild(codicon(group.icon, 'mutsumi-picker-group-icon'));
             }
             const label = document.createElement('span');
             label.textContent = group.label;
@@ -168,11 +166,8 @@ export function renderPickerGroups(
             if (entry.description) {
                 row.title = entry.description;
             }
-            const check = document.createElement('span');
-            check.className = 'mutsumi-picker-check';
-            if (entry.selected) {
-                check.classList.add('codicon', 'codicon-check');
-            }
+            const check = entry.selected ? codicon('check') : document.createElement('span');
+            check.classList.add('mutsumi-picker-check');
             row.appendChild(check);
             const label = document.createElement('span');
             label.className = 'mutsumi-picker-label';

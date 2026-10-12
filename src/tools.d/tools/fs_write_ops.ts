@@ -42,6 +42,6 @@ export const mkdirTool: ITool = {
         }
     },
     prettyPrint: (args: any) => {
-        return `📂 Mutsumi created directory ${args.uri || '(unknown path)'}`;
+        return `$(new-folder) Mutsumi created directory ${args.uri || '(unknown path)'}`;
     }
 };

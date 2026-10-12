@@ -28,6 +28,6 @@ export const killShellTaskTool: ITool = {
         const snap = task.snapshot();
         return `Task terminated. Output:\n\n${formatShellOutput(snap, { showExit: true })}`;
     },
-    prettyPrint: (args: any) => `🛑 Mutsumi killed shell task ${args.task_id || '(unknown)'}`,
+    prettyPrint: (args: any) => `$(stop) Mutsumi killed shell task ${args.task_id || '(unknown)'}`,
     shouldCache: false
 };

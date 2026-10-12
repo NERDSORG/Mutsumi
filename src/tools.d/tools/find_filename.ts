@@ -71,6 +71,6 @@ export const searchFileNameIncludesTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `🔍 Mutsumi searched files named "*${args.name_includes || "(unknown)*"}*" in ${args.uri || "(unknown directory)"}`;
+		return `$(search) Mutsumi searched files named "*${args.name_includes || "(unknown)*"}*" in ${args.uri || "(unknown directory)"}`;
 	},
 };

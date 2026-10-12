@@ -6,6 +6,7 @@
  */
 
 import { rpc } from './bridge';
+import { codicon } from './codicon';
 import type { UiContext } from './types';
 
 export interface ToolbarItem {
@@ -104,9 +105,7 @@ export function buildToolbar(ctx: UiContext): HTMLElement {
         const label = ctx.label(item.labelKey);
         button.title = label;
         button.setAttribute('aria-label', label);
-        const icon = document.createElement('span');
-        icon.className = `codicon codicon-${item.icon}`;
-        button.appendChild(icon);
+        button.appendChild(codicon(item.icon));
         // Popup-anchoring buttons are wired by the popup itself.
         if (!item.popupId && item.run) {
             button.addEventListener('click', () => item.run!(ctx));

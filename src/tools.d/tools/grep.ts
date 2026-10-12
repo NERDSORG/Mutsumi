@@ -133,7 +133,7 @@ export const grepTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `🔍 Mutsumi grepped "${args.keyword || "(unknown)"}" in ${args.uri || "(unknown path)"}`;
+		return `$(search) Mutsumi grepped "${args.keyword || "(unknown)"}" in ${args.uri || "(unknown path)"}`;
 	},
 };
 

@@ -159,7 +159,7 @@ Use inspect_shell_task with task_id="${task.id}" to inspect output.`;
 				: args.cmd
 			: "(unknown command)";
 		const mode = args.background ? "[background] " : "";
-		return `⚡ Mutsumi executed ${mode}"${cmdPreview}" in ${args.uri || "(unknown directory)"}`;
+		return `$(terminal) Mutsumi executed ${mode}"${cmdPreview}" in ${args.uri || "(unknown directory)"}`;
 	},
 	argsToCodeBlock: ["cmd"],
 	codeBlockFilePaths: [undefined],

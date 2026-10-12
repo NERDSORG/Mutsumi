@@ -56,6 +56,6 @@ export const inspectShellTaskTool: ITool = {
         }
         return parts.join('\n\n').trim() || '(no output yet)';
     },
-    prettyPrint: (args: any) => `🔍 Mutsumi inspected shell task ${args.task_id || '(unknown)'}`,
+    prettyPrint: (args: any) => `$(debug-console) Mutsumi inspected shell task ${args.task_id || '(unknown)'}`,
     shouldCache: false
 };

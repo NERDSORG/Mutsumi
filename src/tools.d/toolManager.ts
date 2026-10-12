@@ -132,7 +132,7 @@ export class ToolSet {
 	getPrettyPrint(name: string, args: any): string {
 		const tool = this.tools.get(name);
 		if (!tool) {
-			return `🔧 Tool Call: ${name}`;
+			return `$(tools) Tool Call: ${name}`;
 		}
 		return tool.prettyPrint(args);
 	}

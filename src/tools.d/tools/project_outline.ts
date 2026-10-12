@@ -76,6 +76,6 @@ export const projectOutlineTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `🏗️ Mutsumi generated project outline for ${args.uri || "(unknown directory)"}`;
+		return `$(symbol-structure) Mutsumi generated project outline for ${args.uri || "(unknown directory)"}`;
 	},
 };

@@ -59,8 +59,8 @@ export const readFileTool: ITool = {
     },
     prettyPrint: (args: any) => {
         if (Array.isArray(args.range)) {
-            return `📖 Mutsumi read lines ${args.range[0] ?? '?'}-${args.range[1] ?? '?'} of ${args.uri || '(unknown file)'}`;
+            return `$(book) Mutsumi read lines ${args.range[0] ?? '?'}-${args.range[1] ?? '?'} of ${args.uri || '(unknown file)'}`;
         }
-        return `📖 Mutsumi read ${args.uri || '(unknown file)'}`;
+        return `$(book) Mutsumi read ${args.uri || '(unknown file)'}`;
     }
 };

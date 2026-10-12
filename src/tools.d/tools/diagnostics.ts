@@ -114,8 +114,8 @@ export const getWarningErrorTool: ITool = {
     },
     prettyPrint: (args: any) => {
         if (args.uri) {
-            return `⚠️ Mutsumi checked diagnostics for ${args.uri}`;
+            return `$(warning) Mutsumi checked diagnostics for ${args.uri}`;
         }
-        return `⚠️ Mutsumi checked workspace diagnostics`;
+        return `$(warning) Mutsumi checked workspace diagnostics`;
     }
 };

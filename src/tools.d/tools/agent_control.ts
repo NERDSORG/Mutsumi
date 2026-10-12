@@ -110,7 +110,7 @@ export const dispatchSubagentsTool: ITool = {
     },
     prettyPrint: (args: any) => {
         const agentCount = args.sub_agents?.length || 0;
-        return `🍴 Mutsumi dispatched ${agentCount} sub-agent${agentCount !== 1 ? 's' : ''}`;
+        return `$(git-branch) Mutsumi dispatched ${agentCount} sub-agent${agentCount !== 1 ? 's' : ''}`;
     },
     argsToCodeBlock: [ 'sub_agents' ],
     codeBlockFilePaths: [ 'sub_agents.json' ]
@@ -143,7 +143,7 @@ export const taskFinishTool: ITool = {
 
         return 'Task Finished. Report submitted.';
     },    prettyPrint: (_args: any) => {
-        return `✅ Mutsumi finished task`;
+        return `$(check) Mutsumi finished task`;
     },
     argsToCodeBlock: [ 'context_summary' ],
     codeBlockFilePaths: [ undefined ]
@@ -180,7 +180,7 @@ export const communicateTool: ITool = {
         return context.session.deliverAgentMessage(targetId, text);
     },
     prettyPrint: (args: any) => {
-        return `💬 Mutsumi sent a message to ${String(args.target_session_id ?? '').slice(0, 8)}`;
+        return `$(comment-discussion) Mutsumi sent a message to ${String(args.target_session_id ?? '').slice(0, 8)}`;
     },
     argsToCodeBlock: ['message'],
     codeBlockFilePaths: [undefined]
@@ -265,6 +265,6 @@ export const getAgentTypesTool: ITool = {
         }
     },
     prettyPrint: (_args: any) => {
-        return `🐧 Mutsumi listed available agent types`;
+        return `$(robot) Mutsumi listed available agent types`;
     }
 };

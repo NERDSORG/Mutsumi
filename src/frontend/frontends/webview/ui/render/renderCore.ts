@@ -11,6 +11,7 @@
  */
 
 import type { RenderBlock, RenderData } from '../../../../../shared/renderTypes';
+import { codicon, extractLeadingIcon } from '../codicon';
 
 import { micromark } from 'micromark';
 import { gfm, gfmHtml } from 'micromark-extension-gfm';
@@ -20,6 +21,14 @@ import { toHtml } from 'hast-util-to-html';
 interface PreFingerprint {
   language: string;
   text: string;
+}
+
+/** Host-translated strings; configured once at bundle startup (ui/main.ts). */
+let label: (key: string) => string = (key) => key;
+
+/** Wire the host's label map into the renderer. */
+export function configureRendererLabels(labelFn: (key: string) => string): void {
+  label = labelFn;
 }
 
 /** Parse markdown to HTML using micromark with GFM support. */
@@ -88,11 +97,14 @@ function getCodeLanguage(code: HTMLElement): string {
   return match ? match[1].toLowerCase() : '';
 }
 
-// Paths from the official microsoft/vscode-codicons copy.svg and check.svg.
-const COPY_ICON =
-  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5V12.73C2.4 12.38 2 11.74 2 11V5C2 2.79 3.79 1 6 1H9C9.74 1 10.38 1.4 10.73 2H6C4.35 2 3 3.35 3 5ZM11 15H6C4.897 15 4 14.103 4 13V5C4 3.897 4.897 3 6 3H11C12.103 3 13 3.897 13 5V13C13 14.103 12.103 15 11 15ZM12 5C12 4.448 11.552 4 11 4H6C5.448 4 5 4.448 5 5V13C5 13.552 5.448 14 6 14H11C11.552 14 12 13.552 12 13V5Z"/></svg>';
-const CHECK_ICON =
-  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6572 3.13573C13.8583 2.9465 14.175 2.95614 14.3643 3.15722C14.5535 3.35831 14.5438 3.675 14.3428 3.86425L5.84277 11.8642C5.64597 12.0494 5.33756 12.0446 5.14648 11.8535L1.64648 8.35351C1.45121 8.15824 1.45121 7.84174 1.64648 7.64647C1.84174 7.45121 2.15825 7.45121 2.35351 7.64647L5.50976 10.8027L13.6572 3.13573Z"/></svg>';
+/** Swap the copy button between its idle and "copied" presentation. */
+function setCopyButtonState(button: HTMLButtonElement, copied: boolean): void {
+  button.classList.toggle('is-copied', copied);
+  const key = copied ? 'chat.copied' : 'chat.copyCode';
+  button.title = label(key);
+  button.setAttribute('aria-label', label(key));
+  button.replaceChildren(codicon(copied ? 'check' : 'copy'));
+}
 
 /** Add the toolbar control to a fresh block-level code element. */
 function decorateCodeBlock(pre: HTMLPreElement): void {
@@ -100,9 +112,7 @@ function decorateCodeBlock(pre: HTMLPreElement): void {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'mutsumi-copy-code';
-  button.title = 'Copy code';
-  button.setAttribute('aria-label', 'Copy code');
-  button.innerHTML = COPY_ICON;
+  setCopyButtonState(button, false);
   pre.appendChild(button);
 }
 
@@ -134,7 +144,8 @@ function renderBlock(block: RenderBlock): HTMLElement {
       const details = document.createElement('details');
       if (!block.collapsed) details.setAttribute('open', '');
       const summary = document.createElement('summary');
-      summary.textContent = '💭 Thinking Process';
+      summary.appendChild(codicon('lightbulb', 'mutsumi-label-icon'));
+      summary.appendChild(document.createTextNode(label('chat.reasoningSummary')));
       details.appendChild(summary);
       const content = document.createElement('div');
       content.className = 'mutsumi-reasoning-content';
@@ -147,15 +158,25 @@ function renderBlock(block: RenderBlock): HTMLElement {
       const details = document.createElement('details');
       if (block.isStreaming) details.setAttribute('open', '');
       const summary = document.createElement('summary');
-      const prefix = block.isStreaming ? '⏳ ' : '';
-      const suffix = block.isStreaming ? ' ...' : '';
-      summary.textContent = `${prefix}${block.summary}${suffix}`;
+      // The streaming spinner is ours; the tool icon is the leading token of
+      // the backend-authored summary. Both stay separate nodes, so neither
+      // one is ever re-scanned as text.
+      if (block.isStreaming) {
+        summary.appendChild(codicon('sync', 'codicon-modifier-spin mutsumi-label-icon'));
+      }
+      const leading = extractLeadingIcon(block.summary);
+      if (leading) {
+        summary.appendChild(codicon(leading.name, 'mutsumi-label-icon'));
+      }
+      summary.appendChild(document.createTextNode(
+        `${leading ? leading.rest : block.summary}${block.isStreaming ? ' ...' : ''}`,
+      ));
       details.appendChild(summary);
 
       const argsDiv = document.createElement('div');
       argsDiv.className = 'mutsumi-tool-args';
       const argsTitle = document.createElement('strong');
-      argsTitle.textContent = `Arguments${block.isStreaming ? ' (Streaming)' : ''}:`;
+      argsTitle.textContent = label(block.isStreaming ? 'chat.toolArgsStreaming' : 'chat.toolArgs');
       argsDiv.appendChild(argsTitle);
 
       const codeBlockArgs = new Set(block.renderingConfig?.argsToCodeBlock ?? []);
@@ -201,9 +222,11 @@ function renderBlock(block: RenderBlock): HTMLElement {
                 lang = getLanguageIdentifier(ext);
               }
             }
-            const label = document.createElement('div');
-            label.innerHTML = `<strong>${argName}:</strong>`;
-            argsDiv.appendChild(label);
+            const argLabel = document.createElement('div');
+            const argNameEl = document.createElement('strong');
+            argNameEl.textContent = `${argName}:`;
+            argLabel.appendChild(argNameEl);
+            argsDiv.appendChild(argLabel);
             const pre = document.createElement('pre');
             const code = document.createElement('code');
             code.className = lang ? `language-${lang}` : '';
@@ -223,7 +246,9 @@ function renderBlock(block: RenderBlock): HTMLElement {
 
       if (block.result !== undefined) {
         const resultTitle = document.createElement('div');
-        resultTitle.innerHTML = '<strong>Result:</strong>';
+        const resultNameEl = document.createElement('strong');
+        resultNameEl.textContent = label('chat.toolResult');
+        resultTitle.appendChild(resultNameEl);
         details.appendChild(resultTitle);
         const pre = document.createElement('pre');
         const code = document.createElement('code');
@@ -573,16 +598,10 @@ export function installCopyCodeHandler(): void {
 
     void navigator.clipboard.writeText(code.textContent || '').then(() => {
       if (!button.isConnected) return;
-      button.classList.add('is-copied');
-      button.title = 'Copied';
-      button.setAttribute('aria-label', 'Copied');
-      button.innerHTML = CHECK_ICON;
+      setCopyButtonState(button, true);
       window.setTimeout(() => {
         if (!button.isConnected) return;
-        button.classList.remove('is-copied');
-        button.title = 'Copy code';
-        button.setAttribute('aria-label', 'Copy code');
-        button.innerHTML = COPY_ICON;
+        setCopyButtonState(button, false);
       }, 1500);
     }).catch(() => {
       // Clipboard access can be denied by the webview/browser; rendering stays intact.

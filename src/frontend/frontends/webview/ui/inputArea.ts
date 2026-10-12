@@ -6,6 +6,7 @@
  */
 
 import { rpc } from './bridge';
+import { codicon } from './codicon';
 import { highlightMarkdownSource } from './render/renderCore';
 import { buildToolbar } from './toolbar';
 import { AnchoredPopup, renderPickerGroups } from './popup';
@@ -50,14 +51,6 @@ export interface InputAreaCallbacks {
 }
 
 const IMG_LINK_REGEX = /!\[[^\]]*\]\((file:\/\/[^)\s]+)\)/g;
-
-/** Codicon glyph for an icon-only button (the button carries the label). */
-function buttonIcon(name: string): HTMLElement {
-    const el = document.createElement('span');
-    el.className = `codicon codicon-${name}`;
-    el.setAttribute('aria-hidden', 'true');
-    return el;
-}
 
 export class InputArea {
     private readonly rootEl: HTMLElement;
@@ -158,7 +151,7 @@ export class InputArea {
         this.modeButton = document.createElement('button');
         this.modeButton.type = 'button';
         this.modeButton.className = 'mutsumi-mode-button';
-        this.modeButton.appendChild(buttonIcon('chevron-up'));
+        this.modeButton.appendChild(codicon('chevron-up'));
         actionRow.appendChild(this.modeButton);
         this.modePicker = new ModePickerPopup(this.modeButton, (id) => {
             this.sendMode = id as SendMode;
@@ -171,7 +164,7 @@ export class InputArea {
         const interruptLabel = ctx.label('chat.interrupt');
         this.interruptButton.title = interruptLabel;
         this.interruptButton.setAttribute('aria-label', interruptLabel);
-        this.interruptButton.appendChild(buttonIcon('primitive-square'));
+        this.interruptButton.appendChild(codicon('primitive-square'));
         this.interruptButton.addEventListener('click', () => this.callbacks.onInterrupt());
         actionRow.appendChild(this.interruptButton);
 
@@ -181,7 +174,7 @@ export class InputArea {
         const sendLabel = ctx.label('chat.send');
         this.sendButton.title = sendLabel;
         this.sendButton.setAttribute('aria-label', sendLabel);
-        this.sendButton.appendChild(buttonIcon('arrow-up'));
+        this.sendButton.appendChild(codicon('arrow-up'));
         this.sendButton.addEventListener('click', () => this.send());
         actionRow.appendChild(this.sendButton);
         composer.appendChild(actionRow);
@@ -202,13 +195,22 @@ export class InputArea {
         for (const pending of state.pendingSends) {
             const chip = document.createElement('div');
             chip.className = 'mutsumi-queue-chip';
-            chip.textContent = `${pending.mode === 'steer' ? '⚡' : '…'} ${pending.text.slice(0, 80)}`;
+            // Two regions: the icon element, then the user's text as its own
+            // node — message content is never scanned for icon tokens.
+            chip.appendChild(codicon(pending.mode === 'steer' ? 'zap' : 'clock', 'mutsumi-chip-icon'));
+            const text = document.createElement('span');
+            text.className = 'mutsumi-chip-text';
+            text.textContent = pending.text;
+            chip.appendChild(text);
             this.queueBar.appendChild(chip);
         }
         if (state.pendingSends.length === 0 && state.queuedCount > 0) {
             const chip = document.createElement('div');
             chip.className = 'mutsumi-queue-chip';
-            chip.textContent = this.ctx.label('chat.queuedCount').replace('{0}', String(state.queuedCount));
+            const text = document.createElement('span');
+            text.className = 'mutsumi-chip-text';
+            text.textContent = this.ctx.label('chat.queuedCount').replace('{0}', String(state.queuedCount));
+            chip.appendChild(text);
             this.queueBar.appendChild(chip);
         }
         this.queueBar.style.display = this.queueBar.children.length > 0 ? '' : 'none';
@@ -262,7 +264,7 @@ export class InputArea {
             const span = document.createElement('span');
             span.className = 'mutsumi-mode-button-label';
             span.textContent = label;
-            this.modeButton.prepend(span);
+            this.modeButton.appendChild(span);
         }
         this.modePicker.setGroups([{
             id: 'mode',

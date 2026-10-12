@@ -75,7 +75,7 @@ export const globTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `📊 Mutsumi inspected ${args.uri || "(unknown path)"}`;
+		return `$(list-unordered) Mutsumi inspected ${args.uri || "(unknown path)"}`;
 	},
 };
 

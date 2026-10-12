@@ -5,6 +5,7 @@
  * @module frontend/frontends/webview/ui/menus
  */
 
+import { codicon } from './codicon';
 import type { UiContext } from './types';
 
 /** A turn as seen by menu actions. */
@@ -96,9 +97,7 @@ export function buildMenuBar(
         const label = ctx.label(item.labelKey);
         button.title = label;
         button.setAttribute('aria-label', label);
-        const icon = document.createElement('span');
-        icon.className = `codicon codicon-${item.icon}`;
-        button.appendChild(icon);
+        button.appendChild(codicon(item.icon));
         button.addEventListener('click', () => item.run(ctx, turn));
         bar.appendChild(button);
     }

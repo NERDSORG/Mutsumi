@@ -74,7 +74,7 @@ export const editFileSearchReplaceTool: ITool = {
         return handleEdit(args.uri, newContent, context, 'edit');
     },
     prettyPrint: (args: any) => {
-        return `✏️ Mutsumi edited ${args.uri || '(unknown file)'}`;
+        return `$(pencil) Mutsumi edited ${args.uri || '(unknown file)'}`;
     },
     argsToCodeBlock: ['search_replace', 'new_content'],
     codeBlockFilePaths: ['uri', 'uri']

@@ -7,6 +7,7 @@
  * @module frontend/frontends/webview/ui/contextPanel
  */
 
+import { codicon } from './codicon';
 import type { ChatState, ContextPanelData, UiContext } from './types';
 import { AnchoredPopup } from './popup';
 
@@ -222,9 +223,7 @@ export class ContextPanel extends AnchoredPopup {
         }
 
         const expanded = this.expanded.has(args.id);
-        const chevron = document.createElement('span');
-        chevron.className = 'mutsumi-tree-chevron codicon';
-        chevron.classList.add(expanded ? 'codicon-chevron-down' : 'codicon-chevron-right');
+        const chevron = codicon(expanded ? 'chevron-down' : 'chevron-right', 'mutsumi-tree-chevron');
         chevron.addEventListener('click', (e) => {
             e.stopPropagation();
             if (this.expanded.has(args.id)) {
@@ -236,7 +235,7 @@ export class ContextPanel extends AnchoredPopup {
         });
         row.appendChild(chevron);
 
-        row.appendChild(codiconEl(args.icon, 'mutsumi-tree-type-icon'));
+        row.appendChild(codicon(args.icon, 'mutsumi-tree-type-icon'));
 
         const label = document.createElement('span');
         label.className = 'mutsumi-tree-label';
@@ -290,7 +289,7 @@ export class ContextPanel extends AnchoredPopup {
         spacer.className = 'mutsumi-tree-chevron mutsumi-tree-spacer';
         row.appendChild(spacer);
 
-        row.appendChild(codiconEl(args.icon, 'mutsumi-tree-type-icon'));
+        row.appendChild(codicon(args.icon, 'mutsumi-tree-type-icon'));
 
         const label = document.createElement('span');
         label.className = 'mutsumi-tree-label';
@@ -301,7 +300,7 @@ export class ContextPanel extends AnchoredPopup {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.className = 'mutsumi-tree-remove';
-            removeBtn.appendChild(codiconEl('close'));
+            removeBtn.appendChild(codicon('close'));
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 args.onRemove!();
@@ -371,7 +370,7 @@ function stateIcon(state: Toggle3, onClick: () => void): HTMLElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `mutsumi-tree-toggle is-${state}`;
-    button.appendChild(codiconEl(
+    button.appendChild(codicon(
         state === 'on' ? 'check' : state === 'partial' ? 'dash' : 'circle-outline',
     ));
     button.addEventListener('click', (e) => {
@@ -379,12 +378,6 @@ function stateIcon(state: Toggle3, onClick: () => void): HTMLElement {
         onClick();
     });
     return button;
-}
-
-function codiconEl(name: string, cls = ''): HTMLElement {
-    const el = document.createElement('span');
-    el.className = `codicon codicon-${name}${cls ? ' ' + cls : ''}`;
-    return el;
 }
 
 /** Collect all leaf full-paths under a directory node. */

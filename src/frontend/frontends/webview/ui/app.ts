@@ -11,6 +11,7 @@
  */
 
 import { rpc, sendFtB } from './bridge';
+import { codicon } from './codicon';
 import { TurnRenderer, renderMarkdown } from './render/renderCore';
 import { buildMenuBar } from './menus';
 import type { MenuTurnContext } from './menus';
@@ -363,7 +364,10 @@ export class App {
 
         const title = document.createElement('div');
         title.className = 'mutsumi-approval-title';
-        title.textContent = `⚠️ ${request.actionDescription}`;
+        // Icon and description stay separate nodes: `actionDescription` is a
+        // shared label (sidebar, notification) and carries no icon token.
+        title.appendChild(codicon('question', 'mutsumi-label-icon mutsumi-approval-icon'));
+        title.appendChild(document.createTextNode(request.actionDescription));
         card.appendChild(title);
 
         const target = document.createElement('div');
@@ -509,11 +513,16 @@ export class App {
     private showErrorBanner(message: string): void {
         const banner = document.createElement('div');
         banner.className = 'mutsumi-error-banner';
-        banner.textContent = `⚠️ ${message}`;
+        // The message is arbitrary text (it can quote shell syntax): keep it as
+        // its own node so it is never scanned for icon tokens.
+        const textEl = document.createElement('span');
+        textEl.appendChild(codicon('error', 'mutsumi-label-icon mutsumi-error-icon'));
+        textEl.appendChild(document.createTextNode(message));
+        banner.appendChild(textEl);
         const dismiss = document.createElement('button');
         dismiss.type = 'button';
         dismiss.className = 'mutsumi-banner-dismiss';
-        dismiss.textContent = '✕';
+        dismiss.appendChild(codicon('close'));
         dismiss.addEventListener('click', () => banner.remove());
         banner.appendChild(dismiss);
         this.flowEl.appendChild(banner);
