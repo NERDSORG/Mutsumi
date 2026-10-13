@@ -17,3 +17,4 @@ assets/*.png
 !assets/*icon*.png
 esbuild.js
 types/
+.sourcery.yaml
