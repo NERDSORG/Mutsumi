@@ -11,6 +11,8 @@ import { highlightMarkdownSource } from './render/renderCore';
 import { buildToolbar } from './toolbar';
 import { AnchoredPopup, renderPickerGroups } from './popup';
 import type { PickerGroup } from './popup';
+import { CompletionMenu } from './completionMenu';
+import { ToolParamsForm } from './toolParamsForm';
 import type { ChatState, UiContext } from './types';
 
 type SendMode = 'queue' | 'steer';
@@ -64,6 +66,9 @@ export class InputArea {
     private readonly modePicker: ModePickerPopup;
     private sendMode: SendMode = 'steer';
     private readonly renameInput: HTMLInputElement;
+    /** `@` completion menu + tool params form (anchored to the composer). */
+    private readonly completionMenu: CompletionMenu;
+    private readonly toolParamsForm: ToolParamsForm;
 
     constructor(
         container: HTMLElement,
@@ -122,12 +127,19 @@ export class InputArea {
         this.textarea.className = 'mutsumi-input-textarea';
         this.textarea.placeholder = ctx.label('chat.inputPlaceholder');
         this.textarea.rows = 3;
-        this.textarea.addEventListener('input', () => this.syncHighlight());
+        this.textarea.addEventListener('input', () => {
+            this.syncHighlight();
+            this.completionMenu.onInput();
+        });
         this.textarea.addEventListener('scroll', () => {
             this.highlightPre.scrollTop = this.textarea.scrollTop;
             this.highlightPre.scrollLeft = this.textarea.scrollLeft;
         });
         this.textarea.addEventListener('keydown', (e) => {
+            // The completion menu gets first pick of the keyboard while open.
+            if (this.completionMenu.handleKeydown(e)) {
+                return;
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
                 this.send();
@@ -179,6 +191,18 @@ export class InputArea {
         actionRow.appendChild(this.sendButton);
         composer.appendChild(actionRow);
 
+        // `@` completion: menu + tool params form, anchored to the composer
+        // card.
+        this.toolParamsForm = new ToolParamsForm(composer, this.textarea, {
+            applyInsertion: (text, start, end) => this.applyInsertion(text, start, end),
+            label: (key) => ctx.label(key),
+        });
+        this.completionMenu = new CompletionMenu(composer, this.textarea, {
+            applyInsertion: (text, start, end) => this.applyInsertion(text, start, end),
+            openToolForm: (tool, range) => this.toolParamsForm.openFor(tool, range),
+            label: (key) => ctx.label(key),
+        });
+
         container.appendChild(root);
         this.refreshModeButton();
         this.syncHighlight();
@@ -224,6 +248,7 @@ export class InputArea {
 
     /** Insert text at the cursor (or set when empty), keeping the input usable. */
     fillInput(text: string): void {
+        this.completionMenu.close();
         if (!this.textarea.value) {
             this.textarea.value = text;
         } else {
@@ -239,12 +264,14 @@ export class InputArea {
 
     /** Replace the whole input text (withdraw action). */
     setText(text: string): void {
+        this.completionMenu.close();
         this.textarea.value = text;
         this.textarea.focus();
         this.syncHighlight();
     }
 
     private send(): void {
+        this.completionMenu.close();
         const text = this.textarea.value.trim();
         if (!text) {
             return;
@@ -252,6 +279,21 @@ export class InputArea {
         this.textarea.value = '';
         this.syncHighlight();
         this.callbacks.onSend(text, this.sendMode);
+    }
+
+    /**
+     * Replace `[start, end)` with `text`, caret after it, refocus. Offsets
+     * are clamped.
+     */
+    private applyInsertion(text: string, start: number, end: number): void {
+        const value = this.textarea.value;
+        const safeStart = Math.max(0, Math.min(start, value.length));
+        const safeEnd = Math.max(safeStart, Math.min(end, value.length));
+        this.textarea.value = value.slice(0, safeStart) + text + value.slice(safeEnd);
+        const caret = safeStart + text.length;
+        this.textarea.setSelectionRange(caret, caret);
+        this.textarea.focus();
+        this.syncHighlight();
     }
 
     /** Reflect the current send mode on the button and the picker selection. */

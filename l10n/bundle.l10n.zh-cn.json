@@ -180,5 +180,11 @@
   "chat.context.macros": "宏",
   "chat.effort.default": "默认",
   "approval.dispatch.action": "派发 {0} 个子 Agent",
-  "chat.sessionSettings": "模型与思考强度"
+  "chat.sessionSettings": "模型与思考强度",
+  "chat.completion.files": "文件",
+  "chat.completion.directories": "目录",
+  "chat.completion.tools": "工具",
+  "chat.completion.mcp": "MCP：{0}",
+  "chat.completion.noMatches": "无匹配项",
+  "chat.completion.toolFormHint": "Tab：切换参数 · Enter：插入工具调用 · Esc：取消"
 }

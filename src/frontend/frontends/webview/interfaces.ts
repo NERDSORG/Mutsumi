@@ -17,3 +17,29 @@ export type WebviewToHostMessage =
 export type HostToWebviewMessage =
     | { kind: 'btf'; name: string; payload: unknown }
     | { kind: 'rpc-result'; id: number; result?: unknown; error?: string };
+
+// ============================================================================
+// `@` completion payloads (adapter-local RPC)
+// ============================================================================
+
+/** One tool row in the `@` completion menu / params form. */
+export interface CompletionToolInfo {
+    /** Name inserted into the text (built-in name or the `mcp__…__hash` exposed name). */
+    name: string;
+    /** Display label: the bare name for built-ins, `serverId/originalName` for MCP tools. */
+    displayName: string;
+    description?: string;
+    /** JSON schema of the parameters object (kosong wire shape). */
+    parameters?: {
+        properties?: Record<string, any>;
+        required?: string[];
+    };
+    /** Owning MCP server id (MCP tools only). */
+    serverId?: string;
+}
+
+/** `searchCompletions` RPC result: fuzzy-ranked files + root directory rows. */
+export interface CompletionSearchResult {
+    files: string[];
+    dirs: string[];
+}

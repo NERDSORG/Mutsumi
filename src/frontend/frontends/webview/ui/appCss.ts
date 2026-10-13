@@ -132,6 +132,108 @@ body {
   text-overflow: ellipsis;
 }
 
+/* --- @ completion menu + tool params form (anchored above the composer) --- */
+.mutsumi-completion-popover {
+  width: 460px;
+  max-width: 92%;
+}
+
+.mutsumi-completion-group {
+  padding: 3px 8px 1px;
+  font-size: 0.85em;
+  font-weight: 600;
+  opacity: 0.75;
+  user-select: none;
+}
+
+.mutsumi-completion-icon {
+  flex: none;
+}
+
+/* Path label: head elides with an ellipsis, tail (last /segment) never truncates. */
+.mutsumi-completion-path {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.mutsumi-completion-dir {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mutsumi-completion-base {
+  flex: 0 0 auto;
+}
+
+.mutsumi-completion-row.is-active {
+  background: var(--vscode-list-activeSelectionBackground, rgba(0, 122, 204, 0.35));
+  color: var(--vscode-list-activeSelectionForeground, inherit);
+}
+
+.mutsumi-completion-empty {
+  padding: 6px 10px;
+  opacity: 0.6;
+  user-select: none;
+}
+
+.mutsumi-toolform-popover {
+  width: 480px;
+  max-width: 92%;
+  padding: 10px 12px;
+}
+
+.mutsumi-toolform-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.mutsumi-toolform-grid {
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.mutsumi-toolform-label {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.92em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.mutsumi-toolform-input {
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.92em;
+}
+
+.mutsumi-toolform-input:focus {
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: -1px;
+}
+
+.mutsumi-toolform-hint {
+  margin-top: 8px;
+  font-size: 0.85em;
+  opacity: 0.6;
+  user-select: none;
+}
+
 .mutsumi-settings-section-header {
   display: flex;
   align-items: center;
@@ -340,9 +442,8 @@ body {
   padding: 0 16px;
 }
 
-/* Mirrors VSCode's own chat confirmation widget
-   (.chat-confirmation-widget2): hairline input border, no fill of its own,
-   and focus reported on the border instead of a permanent colored ring. */
+/* Hairline input border, no fill of its own; focus is reported on the
+   border (:focus-within) instead of a permanent colored ring. */
 .mutsumi-approval-card {
   border: 1px solid var(--vscode-input-border, var(--vscode-chat-requestBorder, transparent));
   border-radius: var(--vscode-cornerRadius-large, 10px);
@@ -481,6 +582,8 @@ body {
    stays in normal flow (never overlaps the transcript), and deliberately has
    no overflow/stacking-context so anchored popups keep opening upward. */
 .mutsumi-composer {
+  /* Positioning context for the completion menu / tool form popups. */
+  position: relative;
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128,128,128,0.4)));
   border-radius: 10px;
@@ -493,9 +596,7 @@ body {
   margin-bottom: 6px;
 }
 
-/* Same surface + hairline as the composer island: queued messages read as
-   smaller siblings of the input area. The old selection-token wash (and the
-   blanket opacity that muddied both text and border) are gone. */
+/* Same surface and hairline as the composer island, one step smaller. */
 .mutsumi-queue-chip {
   display: flex;
   align-items: center;
@@ -624,8 +725,8 @@ body[data-auto-approve="true"] .mutsumi-toolbar-item[data-toolbar-id="autoApprov
   border: none;
   outline: none;
   resize: none;
-  /* Auto-grow with content between the min/max-height clamps below; once the
-     max-height cap is reached the textarea scrolls internally as before. */
+  /* Auto-grows with content between the min/max-height clamps below, then
+     scrolls internally. */
   field-sizing: content;
   background: transparent;
   color: transparent;

@@ -23,6 +23,7 @@ import type { Disposable } from 'vscode';
 import type { AdapterContext } from '../../interfaces';
 import type { FtBEventMap } from '../../../backend/events';
 import type { WebviewToHostMessage } from './interfaces';
+import { listCompletionTools, searchCompletions } from './completionService';
 import { buildChatHtml } from './html';
 import { debugLogger } from '../../../debugLogger';
 
@@ -178,6 +179,13 @@ export class PanelController {
                     return null;
                 }
                 return { webviewUri: this.panel.webview.asWebviewUri(uri).toString() };
+            }
+            // `@` completion data (adapter-local RPC).
+            case 'searchCompletions': {
+                return await searchCompletions(String(args?.query ?? ''));
+            }
+            case 'listCompletionTools': {
+                return listCompletionTools();
             }
             default:
                 throw new Error(`Unknown RPC method: ${method}`);

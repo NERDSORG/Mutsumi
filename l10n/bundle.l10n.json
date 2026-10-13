@@ -180,5 +180,11 @@
   "chat.context.macros": "Macros",
   "chat.effort.default": "default",
   "approval.dispatch.action": "Dispatch {0} sub-agent(s)",
-  "chat.sessionSettings": "Model & reasoning effort"
+  "chat.sessionSettings": "Model & reasoning effort",
+  "chat.completion.files": "Files",
+  "chat.completion.directories": "Directories",
+  "chat.completion.tools": "Tools",
+  "chat.completion.mcp": "MCP: {0}",
+  "chat.completion.noMatches": "No matches",
+  "chat.completion.toolFormHint": "Tab: next parameter · Enter: insert tool call · Esc: cancel"
 }

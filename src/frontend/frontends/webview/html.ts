@@ -50,6 +50,12 @@ export function buildWebviewLabels(): Record<string, string> {
         'chat.context.files': t('chat.context.files'),
         'chat.context.macros': t('chat.context.macros'),
         'chat.effort.default': t('chat.effort.default'),
+        'chat.completion.files': t('chat.completion.files'),
+        'chat.completion.directories': t('chat.completion.directories'),
+        'chat.completion.tools': t('chat.completion.tools'),
+        'chat.completion.mcp': t('chat.completion.mcp'),
+        'chat.completion.noMatches': t('chat.completion.noMatches'),
+        'chat.completion.toolFormHint': t('chat.completion.toolFormHint'),
     };
 }
 

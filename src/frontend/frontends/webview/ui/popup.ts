@@ -1,11 +1,11 @@
 /**
- * @fileoverview Anchored popup primitives for the chat webview.
+ * @fileoverview Popup primitives for the chat webview.
  *
- * `AnchoredPopup` is the shared base for every responsive popup that opens
- * directly above a toolbar button: it wraps the anchor button in a positioned
- * span, opens above it, and closes on toggle / Escape / outside click.
- * `renderPickerGroups` is the shared group/row renderer used by picker-style
- * popups (collapsible groups, codicon check on the selected row).
+ * `PopupBase` owns the shared lifecycle (root element, open/close, outside-
+ * mousedown / Escape dismiss); `AnchoredPopup` adds button anchoring for the
+ * toolbar popups; the completion menu and tool params form extend
+ * `PopupBase` directly, anchored to the composer card. `renderPickerGroups`
+ * is the shared group/row renderer for picker-style popups.
  *
  * @module frontend/frontends/webview/ui/popup
  */
@@ -19,26 +19,93 @@ export interface StateDrivenPopup {
 }
 
 /**
- * A responsive popup anchored above a button. Subclasses implement
- * {@link AnchoredPopup.render} to fill the popup body.
+ * Shared popup base: owns the root element and the open/close lifecycle.
+ * Subclasses attach {@link PopupBase.rootEl} where they want it and
+ * implement {@link PopupBase.render}.
  */
-export abstract class AnchoredPopup {
-    private readonly anchor: HTMLElement;
+export abstract class PopupBase {
     protected readonly rootEl: HTMLElement;
-    private open = false;
+    private opened = false;
 
     private readonly dismissListener = (event: MouseEvent) => {
-        if (!this.anchor.contains(event.target as Node)) {
+        if (!this.isInside(event.target as Node)) {
             this.close();
         }
     };
     private readonly escapeListener = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') {
+        // Esc during an IME composition cancels the composition, not the popup.
+        if (event.key === 'Escape' && !event.isComposing) {
             this.close();
         }
     };
 
+    constructor() {
+        this.rootEl = document.createElement('div');
+        this.rootEl.className = 'mutsumi-popup';
+        this.rootEl.style.display = 'none';
+    }
+
+    /**
+     * Containment test for the outside-mousedown dismiss. Defaults to the
+     * popup body itself; anchored popups widen it to their anchor.
+     */
+    protected isInside(target: Node): boolean {
+        return this.rootEl.contains(target);
+    }
+
+    open(): void {
+        if (this.opened) {
+            return;
+        }
+        this.opened = true;
+        this.rootEl.style.display = '';
+        this.render();
+        document.addEventListener('mousedown', this.dismissListener, true);
+        document.addEventListener('keydown', this.escapeListener, true);
+    }
+
+    close(): void {
+        if (!this.opened) {
+            return;
+        }
+        this.opened = false;
+        this.rootEl.style.display = 'none';
+        document.removeEventListener('mousedown', this.dismissListener, true);
+        document.removeEventListener('keydown', this.escapeListener, true);
+    }
+
+    toggle(): void {
+        if (this.opened) {
+            this.close();
+        } else {
+            this.open();
+        }
+    }
+
+    isOpen(): boolean {
+        return this.opened;
+    }
+
+    /** Re-render the popup body if it is currently open. */
+    protected refreshIfOpen(): void {
+        if (this.opened) {
+            this.render();
+        }
+    }
+
+    /** Render the popup body into {@link PopupBase.rootEl}. */
+    protected abstract render(): void;
+}
+
+/**
+ * A responsive popup anchored above a button. Subclasses implement
+ * {@link AnchoredPopup.render} to fill the popup body.
+ */
+export abstract class AnchoredPopup extends PopupBase {
+    private readonly anchor: HTMLElement;
+
     constructor(anchorButton: HTMLElement, options?: { align?: 'left' | 'right' }) {
+        super();
         // Wrap the anchor button in a positioned span; the popup is a sibling
         // of the button (never a child, so popup clicks cannot bubble into the
         // button's own toggle handler).
@@ -49,9 +116,6 @@ export abstract class AnchoredPopup {
         // Clicking the anchor button toggles the popup.
         anchorButton.addEventListener('click', () => this.toggle());
 
-        this.rootEl = document.createElement('div');
-        this.rootEl.className = 'mutsumi-popup';
-        this.rootEl.style.display = 'none';
         if (options?.align === 'right') {
             this.rootEl.style.left = 'auto';
             this.rootEl.style.right = '0';
@@ -59,41 +123,10 @@ export abstract class AnchoredPopup {
         this.anchor.appendChild(this.rootEl);
     }
 
-    toggle(): void {
-        if (this.open) {
-            this.close();
-        } else {
-            this.open = true;
-            this.rootEl.style.display = '';
-            this.render();
-            document.addEventListener('mousedown', this.dismissListener, true);
-            document.addEventListener('keydown', this.escapeListener, true);
-        }
+    /** The anchor (button + popup together) counts as "inside" for dismiss. */
+    protected override isInside(target: Node): boolean {
+        return this.anchor.contains(target);
     }
-
-    close(): void {
-        if (!this.open) {
-            return;
-        }
-        this.open = false;
-        this.rootEl.style.display = 'none';
-        document.removeEventListener('mousedown', this.dismissListener, true);
-        document.removeEventListener('keydown', this.escapeListener, true);
-    }
-
-    isOpen(): boolean {
-        return this.open;
-    }
-
-    /** Re-render the popup body if it is currently open. */
-    protected refreshIfOpen(): void {
-        if (this.open) {
-            this.render();
-        }
-    }
-
-    /** Render the popup body into {@link AnchoredPopup.rootEl}. */
-    protected abstract render(): void;
 }
 
 // ============================================================================
