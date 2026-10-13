@@ -382,6 +382,11 @@ body {
   padding: 4px 0;
   white-space: pre;
   font-family: var(--vscode-editor-font-family, monospace);
+  /* One row per patch line, so the block is exactly as tall as the diff: no
+     minimum height at all, capped at 20 lines (and never at the cost of the
+     whole panel on a short window). */
+  line-height: 1.4;
+  max-height: min(calc(20 * 1.4em), 40vh);
 }
 
 .mutsumi-diff > div {

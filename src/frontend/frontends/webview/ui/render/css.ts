@@ -84,7 +84,8 @@ export const RENDERER_CSS = `
 /* including markdown code blocks that are DIRECT children of .mutsumi-block */
 /* (micromark output has no intermediate wrapper, so a selector requiring */
 /* ".mutsumi-block > :not(details) pre" would never match them). */
-.mutsumi-block pre {
+.mutsumi-block pre,
+.mutsumi-user-bubble pre {
   position: relative;
   background-color: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
   padding: 12px;
@@ -147,7 +148,10 @@ body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
 /* and tool call args/results. A single shallow selector is required because */
 /* ".mutsumi-block > details > pre code" misses reasoning's code blocks, */
 /* which live one level deeper inside .mutsumi-reasoning-content. */
-.mutsumi-block code {
+/* The user bubble is a markdown host of its own (same renderMarkdown output, */
+/* different container class), so it needs the same treatment. */
+.mutsumi-block code,
+.mutsumi-user-bubble code {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: var(--vscode-editor-font-size, 13px);
 }
@@ -172,7 +176,8 @@ body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
 /* VS Code webview defaults give <code> a background + padding + radius; */
 /* with display:inline that paints a per-line "text highlight" instead of */
 /* the block background owned by <pre>. */
-.mutsumi-block pre code {
+.mutsumi-block pre code,
+.mutsumi-user-bubble pre code {
   display: block;
   padding: 0;
   background: none;
@@ -207,6 +212,16 @@ body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
 .hljs-deletion { color: #f48771; }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: bold; }
+
+/* Inline code and fenced code blocks in the composer's highlight mirror (the
+   markdown grammar wraps both in hljs-code). Theme tokens resolve per theme,
+   so no light-variant override is needed below. Background only: any
+   horizontal padding would shift the mirror out of alignment with the
+   transparent textarea underneath it. */
+.hljs-code {
+  background-color: var(--vscode-textPreformat-background, rgba(128, 128, 128, 0.15));
+  color: var(--vscode-textPreformat-foreground, inherit);
+}
 
 /* --- Light+ / HC Light theme overrides --- */
 /* VS Code webview sets body classes: vscode-light, vscode-dark, */
