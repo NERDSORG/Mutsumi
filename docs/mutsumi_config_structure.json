@@ -51,8 +51,7 @@
             "moonshotai/kimi-k2.7-code",
             "moonshotai/kimi-k2.7-code-highspeed",
             "moonshotai/kimi-k3",
-            "deepseek/deepseek-v4-flash",
-            "deepseek/deepseek-v4-pro",
+            "deepseek/deepseek-flash",
             "stepfun/step-3.7-flash"
         ],
         "moonshotai": [
@@ -67,8 +66,7 @@
             "k3"
         ],
         "deepseek": [
-            "deepseek-v4-flash",
-            "deepseek-v4-pro"
+            "deepseek-flash"
         ]
     },
     "mutsumi.httpServer.password": "XXX",
