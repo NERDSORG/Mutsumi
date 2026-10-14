@@ -1,5 +1,6 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri } from "../utils";
+import { resolveUri, simplifyUri } from "../utils";
+import { getBrief, withBrief } from "../brief";
 import { t } from "../../i18n";
 import { toolsLogger } from "../toolsLogger";
 import * as path from "path";
@@ -14,7 +15,7 @@ function shellLogger(message: string): void {
 
 export const shellTool: ITool = {
 	name: "shell",
-	definition: {
+	definition: withBrief({
 		name: "shell",
 		description:
 			"Execute a shell command. Requires user approval. By default waits for the command to finish (sync). Set background=true to start it detached and return immediately with a task id; use inspect_shell_task to inspect its output later.",
@@ -39,7 +40,7 @@ export const shellTool: ITool = {
 			},
 			required: ["uri", "cmd"],
 		},
-	},
+	}),
 	execute: async (args: any, context: ToolContext) => {
 		try {
 			const { uri: uriInput, cmd, shell_path: shellPath, background } = args;
@@ -153,13 +154,20 @@ Use inspect_shell_task with task_id="${task.id}" to inspect output.`;
 		}
 	},
 	prettyPrint: (args: any) => {
+		const brief = getBrief(args);
+		if (brief) {
+			return `$(terminal) Shell ${brief}`;
+		}
 		const cmdPreview = args.cmd
 			? args.cmd.length > 40
 				? args.cmd.substring(0, 40) + "..."
 				: args.cmd
 			: "(unknown command)";
 		const mode = args.background ? "[background] " : "";
-		return `$(terminal) Mutsumi executed ${mode}"${cmdPreview}" in ${args.uri || "(unknown directory)"}`;
+		const cwd = simplifyUri(args.uri);
+		const cwdSuffix =
+			cwd !== "." && cwd !== "(unknown path)" ? ` in ${cwd}` : "";
+		return `$(terminal) Shell ${mode}"${cmdPreview}"${cwdSuffix}`;
 	},
 	argsToCodeBlock: ["cmd"],
 	codeBlockFilePaths: [undefined],

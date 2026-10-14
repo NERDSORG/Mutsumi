@@ -1,11 +1,12 @@
 import type { ITool } from '../interface';
+import { getBrief, withBrief } from '../brief';
 import { shellTaskRegistry } from '../shell/registry';
 import { formatShellOutput } from '../shell/shellTask';
 import * as vscode from 'vscode';
 
 export const inspectShellTaskTool: ITool = {
     name: 'inspect_shell_task',
-    definition: {
+    definition: withBrief({
         name: 'inspect_shell_task',
         description: 'Inspect a background shell task and retrieve its output. If the task is still running, returns a snapshot without removing it. If the task has exited, returns the full output and consumes (removes) the task from the registry. Optional wait_for parameter waits in the foreground for the specified number of seconds before returning.',
         parameters: {
@@ -20,7 +21,7 @@ export const inspectShellTaskTool: ITool = {
             },
             required: ['task_id']
         }
-    },
+    }),
     execute: async (args: any) => {
         const id = args.task_id;
         if (!id) return 'Error: Missing "task_id" argument.';
@@ -56,6 +57,11 @@ export const inspectShellTaskTool: ITool = {
         }
         return parts.join('\n\n').trim() || '(no output yet)';
     },
-    prettyPrint: (args: any) => `$(debug-console) Mutsumi inspected shell task ${args.task_id || '(unknown)'}`,
+    prettyPrint: (args: any) => {
+        const brief = getBrief(args);
+        return brief
+            ? `$(debug-console) Inspect Shell Task ${brief}`
+            : `$(debug-console) Inspect Shell Task ${args.task_id || '(unknown)'}`;
+    },
     shouldCache: false
 };

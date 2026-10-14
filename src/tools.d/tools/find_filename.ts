@@ -1,5 +1,5 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri, COMMON_IGNORE_GLOBS, withAbortableToken } from "../utils";
+import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS, withAbortableToken } from "../utils";
 import * as vscode from "vscode";
 
 export const searchFileNameIncludesTool: ITool = {
@@ -71,6 +71,6 @@ export const searchFileNameIncludesTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `$(search) Mutsumi searched files named "*${args.name_includes || "(unknown)*"}*" in ${args.uri || "(unknown directory)"}`;
+		return `$(search) Find "*${args.name_includes || "(unknown)"}*" in ${simplifyUri(args.uri)}`;
 	},
 };

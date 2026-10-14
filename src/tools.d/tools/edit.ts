@@ -1,12 +1,13 @@
 import { ITool, ToolContext } from '../interface';
-import { resolveUri, checkAccess } from '../utils';
+import { resolveUri, checkAccess, simplifyUri } from '../utils';
+import { getBrief, withBrief } from '../brief';
 import { handleEdit } from '../edit_file';
 import * as vscode from 'vscode';
 import { TextDecoder } from 'util';
 
 export const editFileSearchReplaceTool: ITool = {
     name: 'edit',
-    definition: {
+    definition: withBrief({
         name: 'edit',
         description: 'Replace parts of a file using search and replace. The search_replace parameter specifies the content to be replaced, and new_content specifies the replacement content.',
         parameters: {
@@ -24,7 +25,7 @@ export const editFileSearchReplaceTool: ITool = {
             },
             required: ['uri', 'search_replace', 'new_content']
         }
-    },
+    }),
     execute: async (args: any, context: ToolContext) => {
         if (!args.uri || args.search_replace === undefined || args.new_content === undefined) {
             return 'Error: Missing arguments (uri, search_replace, new_content).';
@@ -74,7 +75,11 @@ export const editFileSearchReplaceTool: ITool = {
         return handleEdit(args.uri, newContent, context, 'edit');
     },
     prettyPrint: (args: any) => {
-        return `$(pencil) Mutsumi edited ${args.uri || '(unknown file)'}`;
+        const brief = getBrief(args);
+        const suri = simplifyUri(args.uri);
+        return brief
+            ? `$(pencil) Edit ${suri}: ${brief}`
+            : `$(pencil) Edit ${suri}`;
     },
     argsToCodeBlock: ['search_replace', 'new_content'],
     codeBlockFilePaths: ['uri', 'uri']

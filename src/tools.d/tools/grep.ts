@@ -1,5 +1,6 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri, COMMON_IGNORE_GLOBS, withAbortableToken } from "../utils";
+import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS, withAbortableToken } from "../utils";
+import { getBrief, withBrief } from "../brief";
 import * as vscode from "vscode";
 import { TextDecoder } from "util";
 
@@ -7,7 +8,7 @@ const MAX_FILES_TO_GREP = 1000;
 
 export const grepTool: ITool = {
 	name: "grep",
-	definition: {
+	definition: withBrief({
 		name: "grep",
 		description:
 			'Search for a pattern in a file or directory. By default the keyword is interpreted as an ECMAScript regular expression (like `grep -E`). Use `regex: false` to search for the exact literal text. Supports case-insensitive, whole-word, and inverted matching. For directories, recursively searches all files (ignoring common patterns, skipping binary files, truncating long lines). For files, returns matching lines with optional context. Output format: "path:line:content".',
@@ -61,7 +62,7 @@ export const grepTool: ITool = {
 			},
 			required: ["uri", "keyword"],
 		},
-	},
+	}),
 	execute: async (args: any, context: ToolContext) => {
 		const abortSignal = context.toolSession.abortSignal;
 		try {
@@ -133,7 +134,15 @@ export const grepTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `$(search) Mutsumi grepped "${args.keyword || "(unknown)"}" in ${args.uri || "(unknown path)"}`;
+		const brief = getBrief(args);
+		const suri = simplifyUri(args.uri);
+		if (brief) {
+			return `$(search) Grep in ${suri}: ${brief}`;
+		}
+		const keyword = String(args.keyword ?? "(unknown)");
+		const preview =
+			keyword.length > 40 ? keyword.substring(0, 40) + "..." : keyword;
+		return `$(search) Grep "${preview}" in ${suri}`;
 	},
 };
 

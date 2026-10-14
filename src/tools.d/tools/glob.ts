@@ -1,5 +1,5 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri } from "../utils";
+import { resolveUri, simplifyUri } from "../utils";
 import * as vscode from "vscode";
 import * as os from "os";
 import * as fs from "fs";
@@ -75,7 +75,7 @@ export const globTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `$(list-unordered) Mutsumi inspected ${args.uri || "(unknown path)"}`;
+		return `$(list-unordered) Glob ${simplifyUri(args.uri)}`;
 	},
 };
 

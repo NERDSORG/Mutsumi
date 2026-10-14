@@ -1,5 +1,5 @@
 import { ITool, ToolContext } from '../interface';
-import { resolveUri } from '../utils';
+import { resolveUri, simplifyUri } from '../utils';
 import * as vscode from 'vscode';
 import { TextDecoder } from 'util';
 
@@ -58,9 +58,10 @@ export const readFileTool: ITool = {
         }
     },
     prettyPrint: (args: any) => {
+        const suri = simplifyUri(args.uri);
         if (Array.isArray(args.range)) {
-            return `$(book) Mutsumi read lines ${args.range[0] ?? '?'}-${args.range[1] ?? '?'} of ${args.uri || '(unknown file)'}`;
+            return `$(book) Read ${suri}:${args.range[0] ?? '?'}-${args.range[1] ?? '?'}`;
         }
-        return `$(book) Mutsumi read ${args.uri || '(unknown file)'}`;
+        return `$(book) Read ${suri}`;
     }
 };

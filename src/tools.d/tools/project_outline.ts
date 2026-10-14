@@ -1,5 +1,5 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri, COMMON_IGNORE_GLOBS } from "../utils";
+import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS } from "../utils";
 import * as vscode from "vscode";
 import { CodebaseService } from "../codebase/service";
 
@@ -76,6 +76,6 @@ export const projectOutlineTool: ITool = {
 		}
 	},
 	prettyPrint: (args: any) => {
-		return `$(symbol-structure) Mutsumi generated project outline for ${args.uri || "(unknown directory)"}`;
+		return `$(symbol-structure) Outline ${simplifyUri(args.uri)}`;
 	},
 };

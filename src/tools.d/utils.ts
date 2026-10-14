@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as os from "os";
 
 /**
  * Resolve a string input to a vscode.Uri.
@@ -125,6 +126,86 @@ export const COMMON_IGNORE_GLOBS = `{${[...COMMON_IGNORED]
 
 export function isCommonIgnored(name: string): boolean {
 	return name.startsWith(".") || COMMON_IGNORED.has(name);
+}
+
+/**
+ * Simplify a URI-ish argument string for human-facing display (prettyPrint
+ * summaries only — never used on execution paths).
+ *
+ * Rules, in priority order:
+ * 1. Falsy input -> "(unknown path)"; unresolvable input -> returned as-is.
+ * 2. Non-file schemes (mcp://, vscode-remote://, ...) pass through unchanged.
+ * 3. A path inside a workspace folder becomes workspace-relative:
+ *    multi-root -> `<folderName>/<rel>`, single-root -> `<rel>`; the folder
+ *    itself displays as `<folderName>` (multi-root) or `.`. Longest root
+ *    wins when roots are nested.
+ * 4. A path inside the user's home directory becomes `~` or `~/<rel>`.
+ * 5. Anything else is returned as a plain absolute path (forward slashes).
+ *
+ * Workspace-relative wins over `~` (a workspace inside home is the common
+ * case, and the relative form is the more information-dense one). Matching
+ * is case-insensitive (mirrors checkAccess); display keeps the input's
+ * original casing.
+ */
+export function simplifyUri(input: string | undefined | null): string {
+	if (!input) return "(unknown path)";
+	let uri: vscode.Uri;
+	try {
+		uri = resolveUri(input);
+	} catch {
+		return input;
+	}
+	if (uri.scheme !== "file") {
+		return input;
+	}
+	const displayPath = normalizeForDisplay(uri.fsPath);
+
+	const folders = vscode.workspace.workspaceFolders ?? [];
+	const roots = folders
+		.filter((f) => f.uri.scheme === "file")
+		.map((f) => ({
+			name: f.name,
+			path: normalizeForDisplay(f.uri.fsPath),
+		}))
+		.sort((a, b) => b.path.length - a.path.length);
+	for (const root of roots) {
+		const rel = relativeDisplayPath(root.path, displayPath);
+		if (rel === null) continue;
+		if (rel === "") return folders.length > 1 ? root.name : ".";
+		return folders.length > 1 ? `${root.name}/${rel}` : rel;
+	}
+
+	const home = normalizeForDisplay(os.homedir());
+	const relHome = relativeDisplayPath(home, displayPath);
+	if (relHome !== null) {
+		return relHome === "" ? "~" : `~/${relHome}`;
+	}
+
+	return displayPath;
+}
+
+/** Backslashes -> forward slashes; drop trailing slashes (except root). */
+function normalizeForDisplay(p: string): string {
+	let out = p.replace(/\\/g, "/");
+	while (out.length > 1 && out.endsWith("/")) {
+		out = out.slice(0, -1);
+	}
+	return out;
+}
+
+/**
+ * `p` relative to `root`, or null when `p` is outside `root`. Comparison is
+ * case-insensitive but the returned slice keeps the original casing.
+ */
+function relativeDisplayPath(root: string, p: string): string | null {
+	const prefix = root.endsWith("/") ? root : `${root}/`;
+	if (p.startsWith(prefix)) return p.substring(prefix.length);
+	if (p === root) return "";
+	const lowerPrefix = prefix.toLowerCase();
+	const lowerP = p.toLowerCase();
+	if (lowerP.startsWith(lowerPrefix)) return p.substring(prefix.length);
+	if (lowerP === root.toLowerCase()) return "";
+	return null;
 }
 
 /**

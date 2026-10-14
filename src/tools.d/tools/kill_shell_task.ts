@@ -1,10 +1,11 @@
 import type { ITool } from '../interface';
+import { getBrief, withBrief } from '../brief';
 import { shellTaskRegistry } from '../shell/registry';
 import { formatShellOutput } from '../shell/shellTask';
 
 export const killShellTaskTool: ITool = {
     name: 'kill_shell_task',
-    definition: {
+    definition: withBrief({
         name: 'kill_shell_task',
         description: 'Terminate a background shell task. Stops the underlying process (SIGTERM), collects its current full output, and removes (consumes) the task from the registry. Returns the collected output prefixed with a termination notice.',
         parameters: {
@@ -14,7 +15,7 @@ export const killShellTaskTool: ITool = {
             },
             required: ['task_id']
         }
-    },
+    }),
     execute: async (args: any) => {
         const id = args.task_id;
         if (!id) return 'Error: Missing "task_id" argument.';
@@ -28,6 +29,11 @@ export const killShellTaskTool: ITool = {
         const snap = task.snapshot();
         return `Task terminated. Output:\n\n${formatShellOutput(snap, { showExit: true })}`;
     },
-    prettyPrint: (args: any) => `$(stop) Mutsumi killed shell task ${args.task_id || '(unknown)'}`,
+    prettyPrint: (args: any) => {
+        const brief = getBrief(args);
+        return brief
+            ? `$(stop) Kill Shell Task ${brief}`
+            : `$(stop) Kill Shell Task ${args.task_id || '(unknown)'}`;
+    },
     shouldCache: false
 };

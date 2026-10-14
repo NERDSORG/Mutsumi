@@ -1,5 +1,5 @@
 import { ITool, ToolContext } from '../interface';
-import { resolveUri } from '../utils';
+import { resolveUri, simplifyUri } from '../utils';
 import * as vscode from 'vscode';
 import * as path from 'path';
 
@@ -113,9 +113,9 @@ export const getWarningErrorTool: ITool = {
         }
     },
     prettyPrint: (args: any) => {
-        if (args.uri) {
-            return `$(warning) Mutsumi checked diagnostics for ${args.uri}`;
+        if (args.uri && String(args.uri).trim() !== '') {
+            return `$(warning) Diagnostics ${simplifyUri(args.uri)}`;
         }
-        return `$(warning) Mutsumi checked workspace diagnostics`;
+        return `$(warning) Diagnostics`;
     }
 };

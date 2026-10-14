@@ -1,5 +1,5 @@
 import { ITool, ToolContext } from '../interface';
-import { resolveUri, checkAccess } from '../utils';
+import { resolveUri, checkAccess, simplifyUri } from '../utils';
 import { t } from '../../i18n';
 import * as vscode from 'vscode';
 
@@ -42,6 +42,6 @@ export const mkdirTool: ITool = {
         }
     },
     prettyPrint: (args: any) => {
-        return `$(new-folder) Mutsumi created directory ${args.uri || '(unknown path)'}`;
+        return `$(new-folder) Create Directory ${simplifyUri(args.uri)}`;
     }
 };

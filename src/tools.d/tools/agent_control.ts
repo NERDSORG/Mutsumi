@@ -1,11 +1,12 @@
 import { ITool, ToolContext } from '../interface';
 import { AgentTypeRegistry } from '../../agentTypes/registry/agentTypeRegistry';
 import { resolveUri } from '../utils';
+import { getBrief, withBrief } from '../brief';
 import { t } from '../../i18n';
 
 export const dispatchSubagentsTool: ITool = {
     name: 'dispatch_subagents',
-    definition: {
+    definition: withBrief({
         name: 'dispatch_subagents',
         description: 'Split into multiple parallel sub-agents. Sub-agents are created and start running in the background immediately after user approval. This call returns right away with their session ids — it does NOT wait for them. Each sub-agent reports back when it finishes (task_finish): completion reports arrive as user messages. You can also message them (or they you) at any time with the communicate tool.',
         parameters: {
@@ -37,7 +38,7 @@ export const dispatchSubagentsTool: ITool = {
             },
             required: ['context_broadcast', 'sub_agents']
         }
-    },
+    }),
     execute: async (args: any, context: ToolContext) => {
         const parentUuid = context.session.metadata.uuid;
         const parentAgentType = context.session.metadata.agentType;
@@ -110,7 +111,10 @@ export const dispatchSubagentsTool: ITool = {
     },
     prettyPrint: (args: any) => {
         const agentCount = args.sub_agents?.length || 0;
-        return `$(git-branch) Mutsumi dispatched ${agentCount} sub-agent${agentCount !== 1 ? 's' : ''}`;
+        const brief = getBrief(args);
+        return brief
+            ? `$(git-branch) Subagents ×${agentCount}: ${brief}`
+            : `$(git-branch) Subagents ×${agentCount}`;
     },
     argsToCodeBlock: [ 'sub_agents' ],
     codeBlockFilePaths: [ 'sub_agents.json' ]
@@ -143,7 +147,7 @@ export const taskFinishTool: ITool = {
 
         return 'Task Finished. Report submitted.';
     },    prettyPrint: (_args: any) => {
-        return `$(check) Mutsumi finished task`;
+        return `$(check) Report Task Finish`;
     },
     argsToCodeBlock: [ 'context_summary' ],
     codeBlockFilePaths: [ undefined ]
@@ -151,7 +155,7 @@ export const taskFinishTool: ITool = {
 
 export const communicateTool: ITool = {
     name: 'communicate',
-    definition: {
+    definition: withBrief({
         name: 'communicate',
         description: 'Send a message to another agent session by its session UUID (e.g. your parent agent, or a sibling sub-agent from the same dispatch). The message arrives as a user message in that session: if it is running, it is injected at the next round boundary; if it is stopped, it wakes up to process your message.',
         parameters: {
@@ -162,7 +166,7 @@ export const communicateTool: ITool = {
             },
             required: ['target_session_id', 'message']
         }
-    },
+    }),
     execute: async (args: any, context: ToolContext) => {
         const targetId = args.target_session_id;
         const message = args.message;
@@ -180,7 +184,10 @@ export const communicateTool: ITool = {
         return context.session.deliverAgentMessage(targetId, text);
     },
     prettyPrint: (args: any) => {
-        return `$(comment-discussion) Mutsumi sent a message to ${String(args.target_session_id ?? '').slice(0, 8)}`;
+        const brief = getBrief(args);
+        return brief
+            ? `$(comment-discussion) Communicate ${brief}`
+            : `$(comment-discussion) Communicate ${String(args.target_session_id ?? '').slice(0, 8)}`;
     },
     argsToCodeBlock: ['message'],
     codeBlockFilePaths: [undefined]
@@ -265,6 +272,6 @@ export const getAgentTypesTool: ITool = {
         }
     },
     prettyPrint: (_args: any) => {
-        return `$(robot) Mutsumi listed available agent types`;
+        return `$(robot) Confirm Agent Types`;
     }
 };

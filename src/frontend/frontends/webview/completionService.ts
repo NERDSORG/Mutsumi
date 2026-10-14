@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import { isCommonIgnored } from '../../../tools.d/utils';
+import { stripBriefParam } from '../../../tools.d/brief';
 import { ToolManager } from '../../../tools.d/toolManager';
 import { McpRegistry } from '../../../tools.d/mcp/registry';
 import { getMcpToolExposedName } from '../../../tools.d/mcp/utils';
@@ -58,6 +59,11 @@ export async function searchCompletions(query: string): Promise<CompletionSearch
  * common tools plus every connected, schema-valid MCP tool). MCP rows carry
  * display metadata: `serverId/originalName` is shown, the hashed exposed
  * name is inserted.
+ *
+ * Built-in schemas are stripped of the model-facing `brief` trace parameter
+ * (see tools.d/brief) so humans are never asked to fill it; MCP schemas are
+ * external and pass through verbatim — a same-named MCP parameter is
+ * functional and must stay visible.
  */
 export function listCompletionTools(): CompletionToolInfo[] {
     // exposed name → display identity
@@ -85,7 +91,9 @@ export function listCompletionTools(): CompletionToolInfo[] {
                 name: def.name,
                 displayName: mcp ? `${mcp.serverId}/${mcp.originalName}` : def.name,
                 description: def.description,
-                parameters: def.parameters as CompletionToolInfo['parameters'],
+                parameters: (mcp
+                    ? def.parameters
+                    : stripBriefParam(def.parameters)) as CompletionToolInfo['parameters'],
                 serverId: mcp?.serverId,
             };
         });
