@@ -50,6 +50,49 @@ lowlight.registerAlias({ xml: ['htm', 'vue', 'svelte', 'astro'] });
 lowlight.registerAlias('scss', 'sass');
 lowlight.registerAlias('bash', 'fish');
 
+// --- Input-only grammar: bare `[text]` link titles ----------------------
+// `markdown-input` is stock markdown plus the BARE_BRACKET_TITLE mode
+// injected at the head of every markdown-text context (any contains list
+// holding the xml-subLanguage INLINE_HTML mode; code and link internals
+// never qualify). The mode colors bare `[text]` as `hljs-string` — the
+// scope real link titles get — and swallows the whole span, so `_`/`*`
+// inside never start emphasis. Its begin lookahead leaves `[text](url)`,
+// `[text][ref]`, and `^[text]:` to the stock link rules.
+type MarkdownMode = Exclude<
+  NonNullable<ReturnType<(typeof all)['markdown']>['contains']>[number],
+  'self'
+>;
+
+const BARE_BRACKET_TITLE: MarkdownMode = {
+  scope: 'string',
+  begin: /\[(?=[^\]\n]*[^\s\]][^\]\n]*\](?![(\[:]))/,
+  end: /\]/,
+  excludeBegin: true,
+  excludeEnd: true,
+};
+
+function injectBareBracketTitle(mode: MarkdownMode): void {
+  if (
+    mode.contains &&
+    !mode.contains.includes(BARE_BRACKET_TITLE) &&
+    mode.contains.some((m) => m !== 'self' && m.subLanguage === 'xml')
+  ) {
+    mode.contains.unshift(BARE_BRACKET_TITLE);
+  }
+  for (const child of mode.contains ?? []) {
+    if (child !== 'self') injectBareBracketTitle(child);
+  }
+  for (const variant of mode.variants ?? []) {
+    injectBareBracketTitle(variant);
+  }
+}
+
+lowlight.register('markdown-input', (hljs) => {
+  const language = all.markdown(hljs);
+  injectBareBracketTitle(language);
+  return language;
+});
+
 /** Resolve a file extension to a registered lowlight language identifier. */
 function getLanguageIdentifier(ext: string): string {
   const id = ext.toLowerCase();
@@ -72,12 +115,13 @@ function highlightElement(codeEl: HTMLElement, lang: string): void {
 
 /**
  * Highlight markdown SOURCE text (for the input box overlay: syntax
- * highlighting only, no rendering). Returns HTML.
+ * highlighting only, no rendering). Returns HTML. Uses the input-only
+ * grammar so bare `[text]` titles highlight without a destination.
  */
 export function highlightMarkdownSource(text: string): string {
   if (!text) return '';
   try {
-    return toHtml(lowlight.highlight('markdown', text));
+    return toHtml(lowlight.highlight('markdown-input', text));
   } catch {
     const span = document.createElement('span');
     span.textContent = text;
