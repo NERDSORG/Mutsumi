@@ -155,8 +155,9 @@ Use inspect_shell_task with task_id="${task.id}" to inspect output.`;
 	},
 	prettyPrint: (args: any) => {
 		const brief = getBrief(args);
+		const cwd = simplifyUri(args.uri);
 		if (brief) {
-			return `$(terminal) Shell ${brief}`;
+			return `$(terminal) Shell in ${cwd}: ${brief}`;
 		}
 		const cmdPreview = args.cmd
 			? args.cmd.length > 40
@@ -164,7 +165,6 @@ Use inspect_shell_task with task_id="${task.id}" to inspect output.`;
 				: args.cmd
 			: "(unknown command)";
 		const mode = args.background ? "[background] " : "";
-		const cwd = simplifyUri(args.uri);
 		const cwdSuffix =
 			cwd !== "." && cwd !== "(unknown path)" ? ` in ${cwd}` : "";
 		return `$(terminal) Shell ${mode}"${cmdPreview}"${cwdSuffix}`;

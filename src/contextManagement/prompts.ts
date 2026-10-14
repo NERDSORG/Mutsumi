@@ -73,7 +73,8 @@ export async function collectRulesRecursively(dirUri: vscode.Uri, baseUri: vscod
 }
 
 /**
- * Builds system prompt containing runtime context, allowed URIs, completion obligations, and rules.
+ * Builds system prompt containing runtime context, allowed URIs, trace
+ * language, completion obligations, and rules.
  * For non-root agents (isSubAgent=true), includes task_finish obligation.
  */
 export async function getSystemPrompt(
@@ -83,7 +84,10 @@ export async function getSystemPrompt(
     isSubAgent?: boolean
 ): Promise<string> {
     let prompt = `### Runtime Context
-Current Allowed URIs: ${JSON.stringify(allowedUris)}`;
+Current Allowed URIs: ${JSON.stringify(allowedUris)}
+
+### Trace Language
+Tool arguments named \`brief\` are shown to the user in the execution trace. Write them in the same language as the user's messages in this conversation, instead of defaulting to English.`;
 
     if (isSubAgent) {
         prompt += `\n\n## Sub-Agent Identity\nYou are a Sub-Agent. When finishing a task, you must use the \`task_finish\` tool to report completion status to the Parent Agent. You may use the \`communicate\` tool to message your parent or sibling agents by their session id.`;

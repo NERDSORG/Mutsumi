@@ -19,6 +19,8 @@
  *   verbatim — an MCP parameter that happens to share the name is a
  *   functional parameter, unrelated to this convention.
  * - `execute` implementations ignore `brief` entirely; it is trace metadata.
+ * - Language: the system prompt (contextManagement/prompts.ts) instructs the
+ *   model to write briefs in the user's conversation language.
  *
  * @module tools.d/brief
  */

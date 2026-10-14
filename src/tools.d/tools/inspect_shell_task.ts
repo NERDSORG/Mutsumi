@@ -60,7 +60,7 @@ export const inspectShellTaskTool: ITool = {
     prettyPrint: (args: any) => {
         const brief = getBrief(args);
         return brief
-            ? `$(debug-console) Inspect Shell Task ${brief}`
+            ? `$(debug-console) Inspect Shell Task: ${brief}`
             : `$(debug-console) Inspect Shell Task ${args.task_id || '(unknown)'}`;
     },
     shouldCache: false

@@ -32,7 +32,7 @@ export const killShellTaskTool: ITool = {
     prettyPrint: (args: any) => {
         const brief = getBrief(args);
         return brief
-            ? `$(stop) Kill Shell Task ${brief}`
+            ? `$(stop) Kill Shell Task: ${brief}`
             : `$(stop) Kill Shell Task ${args.task_id || '(unknown)'}`;
     },
     shouldCache: false
