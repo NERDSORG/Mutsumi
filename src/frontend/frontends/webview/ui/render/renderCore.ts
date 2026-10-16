@@ -11,6 +11,7 @@
  */
 
 import type { RenderBlock, RenderData } from '../../../../../shared/renderTypes';
+import type { WebviewLabelKey } from '../../interfaces';
 import { codicon, extractLeadingIcon } from '../codicon';
 
 import { micromark } from 'micromark';
@@ -24,10 +25,10 @@ interface PreFingerprint {
 }
 
 /** Host-translated strings; configured once at bundle startup (ui/main.ts). */
-let label: (key: string) => string = (key) => key;
+let label: (key: WebviewLabelKey) => string = (key) => key;
 
 /** Wire the host's label map into the renderer. */
-export function configureRendererLabels(labelFn: (key: string) => string): void {
+export function configureRendererLabels(labelFn: (key: WebviewLabelKey) => string): void {
   label = labelFn;
 }
 

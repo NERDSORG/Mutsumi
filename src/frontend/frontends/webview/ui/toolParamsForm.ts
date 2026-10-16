@@ -10,7 +10,7 @@
 
 import { PopupBase } from './popup';
 import { codicon } from './codicon';
-import type { CompletionToolInfo } from '../interfaces';
+import type { CompletionToolInfo, WebviewLabelKey } from '../interfaces';
 
 interface ParamField {
     name: string;
@@ -20,7 +20,7 @@ interface ParamField {
 
 export interface ToolParamsFormCallbacks {
     applyInsertion(text: string, start: number, end: number): void;
-    label(key: string): string;
+    label(key: WebviewLabelKey): string;
 }
 
 export class ToolParamsForm extends PopupBase {

@@ -13,6 +13,7 @@ import type {
     Turn,
 } from '../../../../backend/events';
 import type { RenderData } from '../../../../shared/renderTypes';
+import type { WebviewLabelKey } from '../interfaces';
 import type { sendFtB } from './bridge';
 
 export type { ApprovalRequestInfo, ContextPanelData, RenderData, SessionSnapshot, Turn };
@@ -26,7 +27,7 @@ export interface UiContext {
     setText: (text: string) => void;
     /** Toggle the session-rename row (toolbar pencil button). */
     toggleRenameRow: () => void;
-    label: (key: string) => string;
+    label: (key: WebviewLabelKey) => string;
 }
 
 /** Aggregate mutable UI state for one panel. */
@@ -45,6 +46,6 @@ export interface ChatState {
 }
 
 /** Look up a label with a fallback to the key itself. */
-export function makeLabeler(labels: Record<string, string>): (key: string) => string {
-    return (key: string) => labels[key] ?? key;
+export function makeLabeler(labels: Record<string, string>): (key: WebviewLabelKey) => string {
+    return (key: WebviewLabelKey) => labels[key] ?? key;
 }

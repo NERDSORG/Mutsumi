@@ -7,11 +7,12 @@
 
 import { rpc } from './bridge';
 import { codicon } from './codicon';
+import type { WebviewLabelKey } from '../interfaces';
 import type { UiContext } from './types';
 
 export interface ToolbarItem {
     id: string;
-    labelKey: string;
+    labelKey: WebviewLabelKey;
     /** Codicon name (without the `codicon-` prefix). */
     icon: string;
     /**

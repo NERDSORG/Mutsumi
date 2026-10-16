@@ -7,56 +7,24 @@
 
 import * as vscode from 'vscode';
 import { t } from '../../../i18n';
+import { WEBVIEW_LABEL_KEYS, type WebviewLabelKey } from './interfaces';
 
-/** Build the static label map (host-side t() translations) for the webview. */
-export function buildWebviewLabels(): Record<string, string> {
-    return {
-        'chat.send': t('chat.send'),
-        'chat.interrupt': t('chat.interrupt'),
-        'chat.inputPlaceholder': t('chat.inputPlaceholder'),
-        'chat.mode.queue': t('chat.mode.queue'),
-        'chat.mode.steer': t('chat.mode.steer'),
-        'chat.copy': t('chat.copy'),
-        'chat.retry': t('chat.retry'),
-        'chat.withdraw': t('chat.withdraw'),
-        'chat.continue': t('chat.continue'),
-        'chat.rename': t('chat.rename'),
-        'chat.renamePlaceholder': t('chat.renamePlaceholder'),
-        'chat.selectModel': t('chat.selectModel'),
-        'chat.reasoningEffort': t('chat.reasoningEffort'),
-        'chat.sessionSettings': t('chat.sessionSettings'),
-        'chat.insertImage': t('chat.insertImage'),
-        'chat.pruneGhostBlocks': t('chat.pruneGhostBlocks'),
-        'chat.debugContext': t('chat.debugContext'),
-        'chat.autoApprove': t('chat.autoApprove'),
-        'chat.contextPanel': t('chat.contextPanel'),
-        'chat.approve': t('chat.approve'),
-        'chat.reject': t('chat.reject'),
-        'chat.rejectSubmit': t('chat.rejectSubmit'),
-        'chat.rejectReasonPlaceholder': t('chat.rejectReasonPlaceholder'),
-        'chat.reasoningSummary': t('chat.reasoningSummary'),
-        'chat.copyCode': t('chat.copyCode'),
-        'chat.copied': t('chat.copied'),
-        'chat.toolArgs': t('chat.toolArgs'),
-        'chat.toolArgsStreaming': t('chat.toolArgsStreaming'),
-        'chat.toolResult': t('chat.toolResult'),
-        'chat.sessionDeleted': t('chat.sessionDeleted'),
-        'chat.debugResultTitle': t('chat.debugResultTitle'),
-        'chat.close': t('chat.close'),
-        'chat.queuedCount': t('chat.queuedCount'),
-        'chat.context.rules': t('chat.context.rules'),
-        'chat.context.skills': t('chat.context.skills'),
-        'chat.context.mcps': t('chat.context.mcps'),
-        'chat.context.files': t('chat.context.files'),
-        'chat.context.macros': t('chat.context.macros'),
-        'chat.effort.default': t('chat.effort.default'),
-        'chat.completion.files': t('chat.completion.files'),
-        'chat.completion.directories': t('chat.completion.directories'),
-        'chat.completion.tools': t('chat.completion.tools'),
-        'chat.completion.mcp': t('chat.completion.mcp'),
-        'chat.completion.noMatches': t('chat.completion.noMatches'),
-        'chat.completion.toolFormHint': t('chat.completion.toolFormHint'),
-    };
+/**
+ * Build the static label map (host-side t() translations) for the webview.
+ * Iterates {@link WEBVIEW_LABEL_KEYS} so the map always covers exactly the
+ * keys webview components may request; warns when a key is missing from the
+ * l10n bundle (t() falls back to the key itself).
+ */
+export function buildWebviewLabels(): Record<WebviewLabelKey, string> {
+    const labels = {} as Record<WebviewLabelKey, string>;
+    for (const key of WEBVIEW_LABEL_KEYS) {
+        const value = t(key);
+        if (value === key) {
+            console.warn(`[mutsumi] webview label missing from l10n bundle: ${key}`);
+        }
+        labels[key] = value;
+    }
+    return labels;
 }
 
 function getNonce(): string {

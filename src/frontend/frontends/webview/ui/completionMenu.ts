@@ -24,7 +24,7 @@ import { rpc } from './bridge';
 import { codicon } from './codicon';
 import { PopupBase } from './popup';
 import { fuzzyFilter } from '../../../../shared/fuzzyMatch';
-import type { CompletionSearchResult, CompletionToolInfo } from '../interfaces';
+import type { CompletionSearchResult, CompletionToolInfo, WebviewLabelKey } from '../interfaces';
 
 /** One selectable row. */
 type Entry =
@@ -37,7 +37,7 @@ export interface CompletionMenuCallbacks {
     applyInsertion(text: string, start: number, end: number): void;
     /** Hand a tool pick off to the params form (the menu is already closed). */
     openToolForm(tool: CompletionToolInfo, range: { start: number; end: number }): void;
-    label(key: string): string;
+    label(key: WebviewLabelKey): string;
 }
 
 const QUERY_DEBOUNCE_MS = 120;

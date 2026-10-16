@@ -6,6 +6,7 @@
  */
 
 import { codicon } from './codicon';
+import type { WebviewLabelKey } from '../interfaces';
 import type { UiContext } from './types';
 
 /** A turn as seen by menu actions. */
@@ -21,7 +22,7 @@ export interface MenuTurnContext {
 export interface MessageMenuItem {
     id: string;
     when: 'user' | 'agent';
-    labelKey: string;
+    labelKey: WebviewLabelKey;
     /** Codicon name (without the `codicon-` prefix); label shows as tooltip. */
     icon: string;
     run(ctx: UiContext, turn: MenuTurnContext): void;
@@ -77,7 +78,7 @@ export const MESSAGE_MENUS: MessageMenuItem[] = [
         labelKey: 'chat.continue',
         icon: 'play',
         run: (ctx) => {
-            ctx.sendFtB('userMessage.send', { text: '继续' });
+            ctx.sendFtB('userMessage.send', { text: ctx.label('chat.continue') });
         },
     },
 ];

@@ -43,3 +43,64 @@ export interface CompletionSearchResult {
     files: string[];
     dirs: string[];
 }
+
+// ============================================================================
+// Static label keys (host translates; the webview only looks up)
+// ============================================================================
+
+/**
+ * Every static-label key the webview bundle may request. The host builds the
+ * translated map from this list (`buildWebviewLabels` in html.ts); webview
+ * components narrow their lookups to {@link WebviewLabelKey} so key typos
+ * fail at compile time. Keep in sync with the l10n bundle.
+ */
+export const WEBVIEW_LABEL_KEYS = [
+    'chat.send',
+    'chat.interrupt',
+    'chat.inputPlaceholder',
+    'chat.mode.queue',
+    'chat.mode.steer',
+    'chat.copy',
+    'chat.retry',
+    'chat.withdraw',
+    'chat.continue',
+    'chat.rename',
+    'chat.renamePlaceholder',
+    'chat.selectModel',
+    'chat.reasoningEffort',
+    'chat.sessionSettings',
+    'chat.insertImage',
+    'chat.pruneGhostBlocks',
+    'chat.debugContext',
+    'chat.autoApprove',
+    'chat.contextPanel',
+    'chat.approve',
+    'chat.reject',
+    'chat.rejectSubmit',
+    'chat.rejectReasonPlaceholder',
+    'chat.reasoningSummary',
+    'chat.copyCode',
+    'chat.copied',
+    'chat.toolArgs',
+    'chat.toolArgsStreaming',
+    'chat.toolResult',
+    'chat.sessionDeleted',
+    'chat.debugResultTitle',
+    'chat.close',
+    'chat.queuedCount',
+    'chat.context.rules',
+    'chat.context.skills',
+    'chat.context.mcps',
+    'chat.context.files',
+    'chat.context.macros',
+    'chat.effort.default',
+    'chat.completion.files',
+    'chat.completion.directories',
+    'chat.completion.tools',
+    'chat.completion.mcp',
+    'chat.completion.noMatches',
+    'chat.completion.toolFormHint',
+] as const;
+
+/** Union of valid static-label keys (see {@link WEBVIEW_LABEL_KEYS}). */
+export type WebviewLabelKey = typeof WEBVIEW_LABEL_KEYS[number];
