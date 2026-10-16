@@ -24,6 +24,8 @@ export interface UiContext {
     fillInput: (text: string) => void;
     /** Replace the whole input text (withdraw action). */
     setText: (text: string) => void;
+    /** Toggle the session-rename row (toolbar pencil button). */
+    toggleRenameRow: () => void;
     label: (key: string) => string;
 }
 

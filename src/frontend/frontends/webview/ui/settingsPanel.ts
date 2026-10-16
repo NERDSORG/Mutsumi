@@ -27,7 +27,6 @@ export class SettingsPanel extends AnchoredPopup {
         private readonly ctx: UiContext,
     ) {
         super(anchorButton);
-        this.rootEl.classList.add('mutsumi-settings-popover');
     }
 
     /** Feed the latest state; re-renders only while open. */

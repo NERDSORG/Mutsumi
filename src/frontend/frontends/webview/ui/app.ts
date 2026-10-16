@@ -88,6 +88,7 @@ export class App {
             sendFtB: (name, payload) => sendFtB(name, { ...payload, sessionId }),
             fillInput: (text) => this.inputArea.fillInput(text),
             setText: (text) => this.inputArea.setText(text),
+            toggleRenameRow: () => this.inputArea.toggleRenameRow(),
         };
         this.state = {
             metadata: null,
@@ -322,7 +323,6 @@ export class App {
         agentHost.className = 'mutsumi-agent-turn';
         rowEl.appendChild(agentHost);
         const agentMenuHost = document.createElement('div');
-        agentMenuHost.className = 'mutsumi-agent-menu-host';
         rowEl.appendChild(agentMenuHost);
 
         this.flowEl.appendChild(rowEl);
@@ -476,6 +476,10 @@ export class App {
     }
 
     private refreshChrome(): void {
+        // Body-level fact for the auto-approve toolbar highlight; App owns
+        // body-level state (CSS holds the consumption policy).
+        document.body.dataset.autoApprove = String(this.state.autoApproveEnabled);
+
         // Toolbar-anchored popups (re-render only while open)
         for (const popup of this.popups.values()) {
             popup.update(this.state);

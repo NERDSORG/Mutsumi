@@ -65,6 +65,7 @@ export class InputArea {
     private readonly modeButton: HTMLButtonElement;
     private readonly modePicker: ModePickerPopup;
     private sendMode: SendMode = 'steer';
+    private readonly renameRow: HTMLElement;
     private readonly renameInput: HTMLInputElement;
     /** `@` completion menu + tool params form (anchored to the composer). */
     private readonly completionMenu: CompletionMenu;
@@ -85,9 +86,8 @@ export class InputArea {
         root.appendChild(this.queueBar);
 
         // Rename row (toggled by the toolbar button)
-        const renameRow = document.createElement('div');
-        renameRow.className = 'mutsumi-rename-row';
-        renameRow.id = 'mutsumi-rename-row';
+        this.renameRow = document.createElement('div');
+        this.renameRow.className = 'mutsumi-rename-row';
         this.renameInput = document.createElement('input');
         this.renameInput.type = 'text';
         this.renameInput.placeholder = ctx.label('chat.renamePlaceholder');
@@ -95,16 +95,16 @@ export class InputArea {
             if (e.key === 'Enter') {
                 this.commitRename();
             } else if (e.key === 'Escape') {
-                renameRow.classList.remove('is-open');
+                this.renameRow.classList.remove('is-open');
             }
         });
         const renameConfirm = document.createElement('button');
         renameConfirm.type = 'button';
         renameConfirm.textContent = ctx.label('chat.rename');
         renameConfirm.addEventListener('click', () => this.commitRename());
-        renameRow.appendChild(this.renameInput);
-        renameRow.appendChild(renameConfirm);
-        root.appendChild(renameRow);
+        this.renameRow.appendChild(this.renameInput);
+        this.renameRow.appendChild(renameConfirm);
+        root.appendChild(this.renameRow);
 
         // Composer card ("fake floating island"): attachment bar, input box,
         // and action row share one rounded border and background.
@@ -212,7 +212,6 @@ export class InputArea {
     update(state: ChatState): void {
         // Fact source for the declarative send/interrupt swap (CSS holds the policy).
         this.rootEl.dataset.agentRunning = String(state.status === 'running');
-        document.body.dataset.autoApprove = String(state.autoApproveEnabled);
 
         // Queue bar
         this.queueBar.innerHTML = '';
@@ -318,12 +317,21 @@ export class InputArea {
         }]);
     }
 
+    /** Toggle the rename row (toolbar pencil button); focus/select on open. */
+    toggleRenameRow(): void {
+        this.renameRow.classList.toggle('is-open');
+        if (this.renameRow.classList.contains('is-open')) {
+            this.renameInput.focus();
+            this.renameInput.select();
+        }
+    }
+
     private commitRename(): void {
         const name = this.renameInput.value.trim();
         if (name) {
             this.ctx.sendFtB('session.rename', { name });
         }
-        document.getElementById('mutsumi-rename-row')?.classList.remove('is-open');
+        this.renameRow.classList.remove('is-open');
     }
 
     private syncHighlight(): void {

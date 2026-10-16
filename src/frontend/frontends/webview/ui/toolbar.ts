@@ -43,15 +43,7 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
         labelKey: 'chat.rename',
         icon: 'pencil',
         run: (ctx) => {
-            const row = document.getElementById('mutsumi-rename-row');
-            if (row) {
-                row.classList.toggle('is-open');
-                const input = row.querySelector('input');
-                if (row.classList.contains('is-open') && input instanceof HTMLInputElement) {
-                    input.focus();
-                    input.select();
-                }
-            }
+            ctx.toggleRenameRow();
         },
     },
     {

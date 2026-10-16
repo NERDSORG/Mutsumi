@@ -555,7 +555,9 @@ body {
 }
 
 .mutsumi-approval-buttons button,
-.mutsumi-reject-reason-row button {
+.mutsumi-reject-reason-row button,
+.mutsumi-rename-row button,
+.mutsumi-debug-header button {
   border: none;
   border-radius: 4px;
   padding: 4px 12px;
@@ -702,15 +704,6 @@ body[data-auto-approve="true"] .mutsumi-toolbar-item[data-toolbar-id="autoApprov
   border: 1px solid var(--vscode-input-border, transparent);
   border-radius: 4px;
   padding: 4px 8px;
-}
-
-.mutsumi-rename-row button {
-  border: none;
-  border-radius: 4px;
-  padding: 4px 12px;
-  cursor: pointer;
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
 }
 
 .mutsumi-attach-bar {
@@ -897,15 +890,6 @@ body.vscode-light {
   align-items: center;
   font-weight: 600;
   margin-bottom: 8px;
-}
-
-.mutsumi-debug-header button {
-  border: none;
-  border-radius: 4px;
-  padding: 4px 12px;
-  cursor: pointer;
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
 }
 
 .mutsumi-debug-content {
