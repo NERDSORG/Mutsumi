@@ -102,7 +102,7 @@ export function getPreExecutionSession(): BackendSession {
  * Provides tool definitions (for completion) and execution with result
  * caching, all resolved through the pre-execution user tool set. Display
  * metadata queries (prettyPrint / rendering config) live in
- * `tools.d/toolDisplay` instead.
+ * `tools.d/toolDisplay`.
  */
 export class PreExecutionToolController {
     /** Singleton instance */

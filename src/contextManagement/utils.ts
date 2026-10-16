@@ -134,7 +134,6 @@ export function parseReference(
 	ref: string,
 	defaultUri: vscode.Uri,
 ): { uri: vscode.Uri; startLine?: number; endLine?: number } {
-	//这个地方加逗号是语法错误！我给你改回来了，以后别再这样了
 	// Parse line numbers from the end, handling Windows paths like "C:/path" vs "path:10:20"
 	let filePath = ref;
 	let startLine: number | undefined;
@@ -240,8 +239,8 @@ export async function executeToolCall(
 		allowedUris: allowedUris,
 		session,
 		toolSession: new ToolSession(session.id, name),
-		// Pre-execution needs no pretty-print summary (it no longer produces an
-		// approval trace); the tool name is a sufficient placeholder.
+		// Pre-execution calls produce no approval trace and need no pretty-print
+		// summary; the tool name is a sufficient placeholder.
 		callDescription: name,
 		signalTermination: () => {}, // No-op for user's explicit tool pre-execution
 	};
