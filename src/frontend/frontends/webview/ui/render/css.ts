@@ -25,6 +25,32 @@ export const RENDERER_CSS = `
   margin: 8px 0;
   /* Lets block-size animate to/from auto (see the ::details-content rules). */
   interpolate-size: allow-keywords;
+  /* Tool calls and reasoning are supporting evidence, not the answer: the
+     whole block rests in the theme's secondary text color
+     (descriptionForeground adapts to every theme, HC included). The expanded
+     content stays secondary permanently — only the summary restores the
+     primary color on hover. The color inherits into the summary, markdown
+     text, inline code, and unhighlighted result <pre> blocks; hljs token
+     spans keep their explicit syntax colors (they sit on their own <pre>
+     background surface). */
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Hover affordance is scoped to the clickable line: the summary text and
+   its gutter icon fade to the primary color; the expanded content never
+   brightens. */
+.mutsumi-block > details > summary:hover,
+.mutsumi-block > details > summary:hover .codicon {
+  color: var(--vscode-foreground);
+}
+
+/* The hover fade is a plain color transition, but the transition property
+   is not inherited: descendants only animate an inherited color change if
+   they carry the timing themselves. Only the summary subtree needs it — the
+   details content never changes color. */
+.mutsumi-block > details > summary,
+.mutsumi-block > details > summary * {
+  transition: color .18s cubic-bezier(.2, 0, 0, 1);
 }
 
 .mutsumi-block > details > summary {
@@ -158,10 +184,12 @@ body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
 
 /* Expanded reasoning gets a bare frame (no fill) so it reads as an aside
    rather than as another paragraph of the answer. Same hairline language as
-   the composer island and the queue chip. */
+   the composer island and the queue chip. De-emphasis lives on the parent
+   details' permanent secondary text color now, so the frame keeps full
+   opacity — stacking 0.85 on top would dim the text below the intended
+   secondary color. */
 .mutsumi-reasoning-content {
   margin-top: 8px;
-  opacity: 0.85;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.4)));
   border-radius: 6px;
   padding: 6px 12px;
