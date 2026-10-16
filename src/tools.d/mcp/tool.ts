@@ -35,9 +35,8 @@ export class McpToolAdapter implements ITool {
 	async execute(args: Record<string, unknown>, context: ToolContext): Promise<string> {
 		if (this.tool.annotations?.readOnlyHint !== true) {
 			const approval = await context.session.requestApproval(
-				`Call MCP tool ${this.originalToolName}`,
+				context,
 				`mcp://${this.serverId}/${this.originalToolName}`,
-				this.name,
 				`${this.tool.description ?? ""}\n\nServer: ${this.serverId}\nTool: ${this.originalToolName}\nArguments: ${safeJson(args)}`,
 			);
 			if (approval) return approval;

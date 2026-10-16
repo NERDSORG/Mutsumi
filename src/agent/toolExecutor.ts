@@ -118,11 +118,19 @@ export class ToolExecutor {
 				const onAgentAbort = () => toolSession.abort();
 				abortSignal.addEventListener("abort", onAgentAbort);
 
+				// The tool's prettyPrint serves both the approval label
+				// (via context.callDescription) and the tool-call summary
+				// rendered into the conversation flow.
+				const callDescription = this.toolSet.getPrettyPrint(
+					toolName,
+					toolArgs,
+				);
 				const context: ToolContext = {
 					allowedUris: this.allowedUris,
 					session: this.session,
 					toolSession,
 					abortSignal: toolSession.abortSignal,
+					callDescription,
 					signalTermination: (taskComplete = false) => {
 						shouldTerminate = true;
 						isTaskComplete = taskComplete;
@@ -163,17 +171,12 @@ export class ToolExecutor {
 					toolSession.complete();
 				}
 
-				// Get the pretty print summary for this tool call
-				const prettyPrintSummary = this.toolSet.getPrettyPrint(
-					toolName,
-					toolArgs,
-				);
 				const config = this.toolSet.getRenderingConfig(toolName);
 				await callbacks.appendOutput(
 					this.renderDataBuilder.formatToolCall(
 						toolName,
 						toolArgs,
-						prettyPrintSummary,
+						callDescription,
 						false,
 						toolResult,
 						config,

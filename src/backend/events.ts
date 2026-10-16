@@ -29,6 +29,12 @@ export interface ApprovalRequestInfo {
     id: string;
     sessionId: string;
     toolName: string;
+    /**
+     * The tool's own prettyPrint for the call that requested approval. May
+     * carry a leading `$(icon)` token: frontends that render codicons extract
+     * it (webview `extractLeadingIcon`); elsewhere it is stripped
+     * (`stripLeadingIconToken`).
+     */
     actionDescription: string;
     targetUri: string;
     details?: string;

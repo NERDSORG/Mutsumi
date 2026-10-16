@@ -241,6 +241,7 @@ export async function executeToolCall(
 		allowedUris: allowedUris,
 		session,
 		toolSession: new ToolSession(session.id, name),
+		callDescription: tm.getPrettyPrint(name, args, false),
 		signalTermination: () => {}, // No-op for user's explicit tool pre-execution
 	};
 	return await withPreExecution(() => tm.executeTool(name, args, context, false));

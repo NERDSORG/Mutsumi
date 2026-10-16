@@ -1,6 +1,5 @@
 import { ITool, ToolContext } from '../interface';
 import { resolveUri, checkAccess, simplifyUri } from '../utils';
-import { t } from '../../i18n';
 import * as vscode from 'vscode';
 
 export const mkdirTool: ITool = {
@@ -29,7 +28,7 @@ export const mkdirTool: ITool = {
             }
 
             // Approval
-            const rejectionMsg = await context.session.requestApproval(t('approval.mkdir.action'), uriInput, 'mkdir');
+            const rejectionMsg = await context.session.requestApproval(context, uriInput);
             if (rejectionMsg !== null) {
                 return rejectionMsg;
             }

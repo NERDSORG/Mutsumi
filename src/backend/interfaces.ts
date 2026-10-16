@@ -78,7 +78,13 @@ export interface CreateAgentOptions {
 /** Init parameters for {@link ApprovalRequestManager.request}. */
 export interface ApprovalRequestInit {
     sessionId: string;
+    /** Filled by `BackendSession` from `context.toolSession.toolName`. */
     toolName: string;
+    /**
+     * Request label shared by all approval frontends. Filled by
+     * `BackendSession` from the tool's prettyPrint (`context.callDescription`);
+     * may carry a leading `$(icon)` token.
+     */
     actionDescription: string;
     targetUri: string;
     details?: string;

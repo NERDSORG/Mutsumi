@@ -10,6 +10,13 @@ export interface ToolContext {
     /** Convenience: alias of `toolSession.abortSignal`. */
     abortSignal?: AbortSignal;
     /**
+     * Human-readable description of the current tool call: the tool's own
+     * `prettyPrint(args)` result, computed by the caller that built this
+     * context. Approval requests derive their label from it. May carry a
+     * leading `$(icon)` token.
+     */
+    callDescription: string;
+    /**
      * Signal that the session should be terminated after this tool call.
      * The tool result will be added to the conversation before termination.
      * @param isTaskComplete - Whether this termination represents a successfully completed task (default: false)

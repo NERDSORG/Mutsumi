@@ -2,7 +2,6 @@ import { ITool, ToolContext } from '../interface';
 import { AgentTypeRegistry } from '../../agentTypes/registry/agentTypeRegistry';
 import { resolveUri } from '../utils';
 import { getBrief, withBrief } from '../brief';
-import { t } from '../../i18n';
 
 export const dispatchSubagentsTool: ITool = {
     name: 'dispatch_subagents',
@@ -91,9 +90,8 @@ export const dispatchSubagentsTool: ITool = {
                 .map((sub: any, i: number) => `${i + 1}. [${sub.agent_type || 'implementer'}] ${String(sub.prompt).slice(0, 200)}\n   allowed_uris: ${(sub.allowed_uris ?? []).join(', ')}`)
                 .join('\n');
             const rejectionMsg = await context.session.requestApproval(
-                t('approval.dispatch.action', normalizedSubAgents.length),
+                context,
                 context.session.fileUri?.toString() ?? parentUuid,
-                'dispatch_subagents',
                 details,
             );
             if (rejectionMsg !== null) {

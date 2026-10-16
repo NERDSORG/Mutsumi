@@ -483,9 +483,7 @@ class EditTransactionManager {
 					const originalContent = new TextDecoder().decode(
 						await vscode.workspace.fs.readFile(uri),
 					);
-					const { requestId, promise } = context.session.requestApprovalWithAction({
-						toolName,
-						actionDescription: t("approval.edit.action", path.basename(uri.path)),
+					const { requestId, promise } = context.session.requestApprovalWithAction(context, {
 						targetUri: uri.toString(),
 						details: buildApprovalDiff(uri, originalContent, newContent),
 						customAction: {

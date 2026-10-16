@@ -25,14 +25,12 @@ export const RENDERER_CSS = `
   margin: 8px 0;
   /* Lets block-size animate to/from auto (see the ::details-content rules). */
   interpolate-size: allow-keywords;
-  /* Tool calls and reasoning are supporting evidence, not the answer: the
-     whole block rests in the theme's secondary text color
-     (descriptionForeground adapts to every theme, HC included). The expanded
-     content stays secondary permanently — only the summary restores the
-     primary color on hover. The color inherits into the summary, markdown
-     text, inline code, and unhighlighted result <pre> blocks; hljs token
-     spans keep their explicit syntax colors (they sit on their own <pre>
-     background surface). */
+  /* Collapsible rows rest in the theme's secondary text color
+     (descriptionForeground adapts to every theme, HC included). The color
+     inherits into the summary, markdown text, inline code, and
+     unhighlighted result <pre> blocks; hljs token spans keep their explicit
+     syntax colors. The expanded content keeps the secondary color
+     permanently; only the summary restores the primary color on hover. */
   color: var(--vscode-descriptionForeground);
 }
 
@@ -44,10 +42,9 @@ export const RENDERER_CSS = `
   color: var(--vscode-foreground);
 }
 
-/* The hover fade is a plain color transition, but the transition property
-   is not inherited: descendants only animate an inherited color change if
-   they carry the timing themselves. Only the summary subtree needs it — the
-   details content never changes color. */
+/* Transitions do not inherit, so the color timing is declared across the
+   whole summary subtree; the details content is excluded because it never
+   changes color. */
 .mutsumi-block > details > summary,
 .mutsumi-block > details > summary * {
   transition: color .18s cubic-bezier(.2, 0, 0, 1);
@@ -73,12 +70,11 @@ export const RENDERER_CSS = `
 }
 
 /* Collapsible rows (reasoning and tool calls) carry a disclosure chevron
-   trailing the summary text. renderCore injects the element, so the icon
-   class itself is the gate — raw <details> in model markdown never get one.
-   opacity keeps it hidden until the summary is hovered — the same reveal
-   pattern as the turn menu bar. The glyph is always chevron-right: [open]
-   rotates it into a chevron-down, so expanding and collapsing play a
-   rotation instead of a glyph swap. */
+   trailing the summary text; renderCore injects the element, and the icon
+   class gates these rules, so raw <details> in model markdown are
+   unaffected. opacity hides the chevron until the summary is hovered (the
+   turn menu bar uses the same reveal pattern). The glyph is always
+   chevron-right; [open] rotates it 90°, animating the expand/collapse. */
 .mutsumi-block > details > summary > .mutsumi-summary-chevron {
   /* Trailing-icon spacing, mirrored from the leading icons (which carry
      margin-right). Same inline treatment as .mutsumi-label-icon:
@@ -87,8 +83,8 @@ export const RENDERER_CSS = `
   font-size: 1em;
   vertical-align: text-bottom;
   opacity: 0;
-  /* The color leg repeats the summary-wide timing because this shorthand
-     replaces the inherited "transition: color" rule rather than merging. */
+  /* The shorthand replaces (not merges with) the summary-subtree color
+     transition on this element, so the color leg is repeated here. */
   transition:
     color .18s cubic-bezier(.2, 0, 0, 1),
     opacity .15s,
@@ -215,10 +211,8 @@ body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
 
 /* Expanded reasoning gets a bare frame (no fill) so it reads as an aside
    rather than as another paragraph of the answer. Same hairline language as
-   the composer island and the queue chip. De-emphasis lives on the parent
-   details' permanent secondary text color now, so the frame keeps full
-   opacity — stacking 0.85 on top would dim the text below the intended
-   secondary color. */
+   the composer island and the queue chip. De-emphasis comes from the parent
+   details' secondary text color, so the frame keeps full opacity. */
 .mutsumi-reasoning-content {
   margin-top: 8px;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.4)));

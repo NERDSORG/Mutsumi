@@ -21,6 +21,7 @@ import { ToolRegistry } from "./tools.d/toolManager";
 import { debugLogger } from "./debugLogger";
 import { toolsLogger } from "./tools.d/toolsLogger";
 import { clearToolCache } from "./tools.d/cache";
+import { stripLeadingIconToken } from "./tools.d/utils";
 import { notifyApprovalNeeded } from "./notifications";
 
 // Agent Type System imports
@@ -175,8 +176,9 @@ async function activateImpl(
 				});
 		}),
 		backend.bus.onBtF("approval.requested", (payload) => {
+			// Notifications cannot render codicons.
 			notifyApprovalNeeded(
-				t("approval.requestNotification", payload.request.actionDescription),
+				t("approval.requestNotification", stripLeadingIconToken(payload.request.actionDescription)),
 			);
 		}),
 	);

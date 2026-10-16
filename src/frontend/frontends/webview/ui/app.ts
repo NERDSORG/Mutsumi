@@ -11,7 +11,7 @@
  */
 
 import { rpc, sendFtB } from './bridge';
-import { codicon } from './codicon';
+import { codicon, extractLeadingIcon } from './codicon';
 import { TurnRenderer, renderMarkdown } from './render/renderCore';
 import { buildMenuBar } from './menus';
 import type { MenuTurnContext } from './menus';
@@ -364,10 +364,12 @@ export class App {
 
         const title = document.createElement('div');
         title.className = 'mutsumi-approval-title';
-        // Icon and description stay separate nodes: `actionDescription` is a
-        // shared label (sidebar, notification) and carries no icon token.
-        title.appendChild(codicon('question', 'mutsumi-label-icon mutsumi-approval-icon'));
-        title.appendChild(document.createTextNode(request.actionDescription));
+        // `actionDescription` is the tool's prettyPrint: a leading `$(icon)`
+        // token renders as the card icon (falling back to `question`); the
+        // rest stays a verbatim text node and is never re-scanned.
+        const leading = extractLeadingIcon(request.actionDescription);
+        title.appendChild(codicon(leading?.name ?? 'question', 'mutsumi-label-icon mutsumi-approval-icon'));
+        title.appendChild(document.createTextNode(leading ? leading.rest : request.actionDescription));
         card.appendChild(title);
 
         const target = document.createElement('div');

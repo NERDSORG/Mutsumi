@@ -22,6 +22,7 @@ import type { McpToolSelection } from '../tools.d/mcp/interfaces';
 import type { RenderData } from '../shared/renderTypes';
 import { RenderDataBuilder } from '../agent/renderDataBuilder';
 import { createEmptyToolSet, createToolSetForAgent, ToolSet } from '../tools.d/toolManager';
+import type { ToolContext } from '../tools.d/interface';
 import type { AgentRunOptions } from '../agent/interfaces';
 import { normalizeReasoningEffort } from '../agent/types';
 import {
@@ -637,21 +638,20 @@ export class BackendSession {
     /**
      * Simple-tool approval path: resolves to null when approved, otherwise to
      * the `[Rejected]`/`[Cancelled]` message the tool returns to the model.
+     * The request label is the tool's own prettyPrint, taken from
+     * `context.callDescription`.
      */
     async requestApproval(
-        actionDescription: string,
+        context: ToolContext,
         targetUri: string,
-        toolName: string,
         details?: string,
     ): Promise<string | null> {
-        const { promise } = this.requestApprovalWithAction({
-            actionDescription,
+        const { promise } = this.requestApprovalWithAction(context, {
             targetUri,
-            toolName,
             details,
         });
         const resolution = await promise;
-        return this.formatApprovalResolution(toolName, resolution);
+        return this.formatApprovalResolution(context.toolSession.toolName, resolution);
     }
 
     /**
@@ -661,10 +661,13 @@ export class BackendSession {
      * pending request.
      */
     requestApprovalWithAction(
-        init: Omit<ApprovalRequestInit, 'sessionId' | 'abortSignal'> & { abortSignal?: AbortSignal },
+        context: ToolContext,
+        init: Omit<ApprovalRequestInit, 'sessionId' | 'abortSignal' | 'actionDescription' | 'toolName'> & { abortSignal?: AbortSignal },
     ): { requestId: string | null; promise: Promise<ApprovalResolution> } {
         const { id, promise } = this.deps.approvals.request({
             ...init,
+            toolName: context.toolSession.toolName,
+            actionDescription: context.callDescription,
             sessionId: this.sessionId,
             abortSignal: init.abortSignal ?? this.currentAbort?.signal,
         });

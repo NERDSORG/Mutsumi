@@ -129,6 +129,16 @@ export function isCommonIgnored(name: string): boolean {
 }
 
 /**
+ * Strip a leading `$(icon)` token (plus its single separator space) from a
+ * display label, for hosts that cannot render codicons (system
+ * notifications, plain-text tooltips). Labels without a leading token pass
+ * through unchanged. Counterpart of the webview's `extractLeadingIcon`.
+ */
+export function stripLeadingIconToken(text: string): string {
+	return text.replace(/^\$\([a-z0-9-]+\) ?/, "");
+}
+
+/**
  * Simplify a URI-ish argument string for human-facing display (prettyPrint
  * summaries only — never used on execution paths).
  *

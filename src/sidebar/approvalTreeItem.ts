@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { t } from '../i18n';
+import { stripLeadingIconToken } from '../tools.d/utils';
 import type { ApprovalRequestRecord } from '../backend/interfaces';
 import type { EventBus } from '../backend/eventBus';
 
@@ -16,7 +17,9 @@ export class ApprovalTreeItem extends vscode.TreeItem {
     constructor(
         public readonly record: ApprovalRequestRecord
     ) {
-        super(record.info.actionDescription, vscode.TreeItemCollapsibleState.None);
+        // Strip the prettyPrint's leading $(icon) token; the status icon
+        // (iconPath) holds the leading visual slot.
+        super(stripLeadingIconToken(record.info.actionDescription), vscode.TreeItemCollapsibleState.None);
 
         this.description = new Date(record.info.timestamp).toLocaleTimeString();
         this.tooltip = this.buildTooltip();
@@ -32,7 +35,9 @@ export class ApprovalTreeItem extends vscode.TreeItem {
     private buildTooltip(): vscode.MarkdownString {
         const info = this.record.info;
         const md = new vscode.MarkdownString();
-        md.appendMarkdown(`**${info.actionDescription}**\n\n`);
+        // Strip the leading $(icon) token: the hover also embeds the raw
+        // `details` text, which must not be scanned for icon tokens.
+        md.appendMarkdown(`**${stripLeadingIconToken(info.actionDescription)}**\n\n`);
         md.appendMarkdown(t('approval.target', info.targetUri) + `\n\n`);
 
         if (info.customAction) {

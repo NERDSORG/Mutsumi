@@ -64,9 +64,8 @@ export const shellTool: ITool = {
 				background ? t("approval.shell.yes") : t("approval.shell.no"),
 			);
 			const rejectionMsg = await context.session.requestApproval(
-				t("approval.shell.action", cmd, uriInput),
+				context,
 				uriInput,
-				"shell",
 				details,
 			);
 
