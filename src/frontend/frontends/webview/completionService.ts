@@ -15,7 +15,7 @@
 import * as vscode from 'vscode';
 import { isCommonIgnored } from '../../../tools.d/utils';
 import { stripBriefParam } from '../../../tools.d/brief';
-import { ToolManager } from '../../../tools.d/toolManager';
+import { PreExecutionToolController } from '../../../tools.d/preExecution';
 import { McpRegistry } from '../../../tools.d/mcp/registry';
 import { getMcpToolExposedName } from '../../../tools.d/mcp/utils';
 import type { CompletionToolInfo, WorkspaceFileList } from './interfaces';
@@ -109,7 +109,7 @@ export function listCompletionTools(): CompletionToolInfo[] {
         }
     }
 
-    return ToolManager.getInstance()
+    return PreExecutionToolController.getInstance()
         .getToolsDefinitions(false)
         .map(def => {
             const mcp = mcpDisplay.get(def.name);

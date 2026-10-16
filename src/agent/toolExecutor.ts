@@ -3,7 +3,7 @@
  * @module agent/toolExecutor
  */
 
-import type { ToolSet } from "../tools.d/toolManager";
+import type { ToolSet } from "../tools.d/toolSet";
 import type { ToolContext } from "../tools.d/interface";
 import { ToolSession } from "../tools.d/toolSession";
 import type { AgentMessage } from "../types";

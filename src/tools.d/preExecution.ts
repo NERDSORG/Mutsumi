@@ -11,10 +11,17 @@
  * not acquire a dependency on the backend (which itself depends on
  * contextManagement).
  *
+ * Also hosts `PreExecutionToolController`, the dedicated controller for
+ * human-authored pre-execution tool calls (definitions + cached execution).
+ *
  * @module tools.d/preExecution
  */
 
 import type { BackendSession } from '../backend/backendSession';
+import type { ToolContext } from './interface';
+import type { Tool } from '@moonshot-ai/kosong';
+import { getUserToolSet } from './userToolSet';
+import { getCachedResult, setCachedResult } from './cache';
 
 /**
  * Tracks nested pre-execution activity.
@@ -84,4 +91,77 @@ export function getPreExecutionSession(): BackendSession {
         throw new Error('Pre-execution session factory not registered (backend not initialized)');
     }
     return preExecutionSessionFactory();
+}
+
+// ============================================================================
+// Pre-execution tool controller
+// ============================================================================
+
+/**
+ * Controller dedicated to human pre-execution (`@[tool{...}]`) tool calls.
+ * Provides tool definitions (for completion) and execution with result
+ * caching, all resolved through the pre-execution user tool set. Display
+ * metadata queries (prettyPrint / rendering config) live in
+ * `tools.d/toolDisplay` instead.
+ */
+export class PreExecutionToolController {
+    /** Singleton instance */
+    private static instance: PreExecutionToolController;
+
+    private constructor() {}
+
+    /**
+     * Gets the singleton instance.
+     * @static
+     * @returns {PreExecutionToolController} The singleton instance
+     */
+    public static getInstance(): PreExecutionToolController {
+        if (!PreExecutionToolController.instance) {
+            PreExecutionToolController.instance = new PreExecutionToolController();
+        }
+        return PreExecutionToolController.instance;
+    }
+
+    /**
+     * Gets tool definitions in the provider-agnostic kosong wire schema.
+     * @param {boolean} isSubAgent - True for non-root/child sessions (includes task_finish)
+     * @returns {Tool[]} Array of tool definitions
+     */
+    public getToolsDefinitions(isSubAgent: boolean): Tool[] {
+        return getUserToolSet(isSubAgent).getDefinitions();
+    }
+
+    /**
+     * Executes a tool with the given arguments and context.
+     * @param {string} name - Tool name
+     * @param {any} args - Tool arguments
+     * @param {ToolContext} context - Execution context
+     * @param {boolean} isSubAgent - True for non-root/child sessions (includes task_finish)
+     * @returns {Promise<string>} Tool execution result
+     */
+    public async executeTool(
+        name: string,
+        args: any,
+        context: ToolContext,
+        isSubAgent: boolean,
+    ): Promise<string> {
+        const toolSet = getUserToolSet(isSubAgent);
+
+        const shouldCache = toolSet.getShouldCache(name);
+
+        if (shouldCache) {
+            const cached = getCachedResult(name, args);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
+        const result = await toolSet.execute(name, args, context);
+
+        if (shouldCache) {
+            setCachedResult(name, args, result);
+        }
+
+        return result;
+    }
 }

@@ -8,7 +8,7 @@
 import { RenderBlock, RenderData } from '../shared/renderTypes';
 import { tryParsePartialJson } from './utils';
 import type { ToolCall } from '@moonshot-ai/kosong';
-import type { ToolSet } from '../tools.d/toolManager';
+import type { ToolSet } from '../tools.d/toolSet';
 import type { RoundSnapshot } from './interfaces';
 
 /**

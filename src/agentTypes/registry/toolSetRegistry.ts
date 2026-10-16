@@ -4,7 +4,7 @@
  */
 
 import type { ITool } from "../../tools.d/interface";
-import { ToolRegistry } from "../../tools.d/toolManager";
+import { ToolRegistry } from "../../tools.d/toolRegistry";
 import { type ToolSetsConfig } from "../interfaces";
 
 /**

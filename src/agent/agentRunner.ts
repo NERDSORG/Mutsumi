@@ -3,7 +3,7 @@
  * @module agent/agentRunner
  */
 
-import { ToolSet } from '../tools.d/toolManager';
+import { ToolSet } from '../tools.d/toolSet';
 import { AgentMessage } from '../types';
 import { createProvider, isAbortError } from '@moonshot-ai/kosong';
 import type { ChatProvider, ProviderConfig } from '@moonshot-ai/kosong';

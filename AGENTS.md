@@ -26,7 +26,7 @@ src/
 │   ├── webview/       # WebView 宿主：webviewAdapter（单例）+ panelController（每面板）+ ui/（浏览器 bundle）
 │   └── lite/          # Lite 适配器：runOnce 一次性程序化运行，自动应答自己审批
 ├── contextManagement/ # 上下文装配：history.ts、ghostBlocks、templateEngine、prompts、skillManager
-├── tools.d/           # 工具系统：toolManager、interface、edit_file（编辑事务）、tools/、preExecution
+├── tools.d/           # 工具系统：toolRegistry（内建工具唯一声明源）、toolSet（单 agent/平面组合与执行）、userToolSet（人类面工具集）、toolDisplay（展示查询）、interface、edit_file（编辑事务）、tools/、preExecution
 │   ├── mcp/           # MCP 宿主（McpRegistry + McpToolAdapter）
 │   └── codebase/      # 代码库服务：Tree-sitter 大纲（project_outline 依赖）
 ├── agentTypes/        # Agent 分角色系统：配置加载/校验/解析（纯配置层）
@@ -84,17 +84,17 @@ src/
 
 ### 2.5 审批 / 派发 / 标题 / 快照
 
-- **ApprovalRequestManager**：自动放行（全局开关 + 预执行平面）→ 留痕；否则广播 `approval.requested` 挂起，首个 `approval.respond` 定案并广播 `approval.resolved`（其余前端立即撤卡）。拒绝理由随 respond 载荷携带。`onDidChangeRequests` 供侧栏审批树订阅。
+- **ApprovalRequestManager**：自动放行分两种——全局开关放行会留痕（审计），预执行平面（用户亲笔 `@[tool{...}]`）放行不留痕；否则广播 `approval.requested` 挂起，首个 `approval.respond` 定案并广播 `approval.resolved`（其余前端立即撤卡）。拒绝理由随 respond 载荷携带。`onDidChangeRequests` 供侧栏审批树订阅。
 - **派发与子 Agent**：`dispatch_subagents` 是普通工具：审批（先于创建，拒绝即不建文件）→ `session.requestDispatch` 创建子会话并后台立即启动 → **工具立即返回**（带子会话 UUID 清单）。结果回收复用 steer：子 `task_finish` → 向父会话注入带发送者身份的 user 消息（运行中→轮次边界注入；停着→唤醒）。`communicate` 工具（免审批）让任意两会话互通（`target_session_id` + `message`），与 task_finish 共享同一投递原语 `session.deliverAgentMessage`。子 Agent 可多次 task_finish。打断级联到整棵 Agent 树；删除会话不级联、但会向父会话投递"已删除"通知。
 - **TitleGenerator**：首轮用户消息完成后 ephemeral 单轮 runner 生成标题，走 `session.rename` 同一路径。
-- **snapshot.ts**：历史 → `session.state` 快照（turns + currentTurn + pendingApprovals + contextPanel + availableModels）。`buildInteractionRenderBlocks` 把 assistant/tool 消息组渲染成 RenderBlock[]——它依赖 ToolManager/MCP 注册表，必须在宿主做。水合用快照，不做逐事件回放。
+- **snapshot.ts**：历史 → `session.state` 快照（turns + currentTurn + pendingApprovals + contextPanel + availableModels）。`buildInteractionRenderBlocks` 把 assistant/tool 消息组渲染成 RenderBlock[]——它依赖 toolDisplay/MCP 注册表，必须在宿主做。水合用快照，不做逐事件回放。
 
 ---
 
 ## 3. Agent 执行核心（`agent/`）
 
 - **AgentRunner**：构造参 `session: BackendSession`；`run(abortController, { systemPrompt, wireHistory })`（system prompt 显式传入；线协议历史中不含 system 消息）。输出走 `session.publishRenderData(renderData)`（对象直传）。错误广播 `session.error`（通知微前端弹原生通知）。标题生成由 drain 循环在首轮完成后触发，runner 不参与。轮次边界有 steer 注入钩子。
-- **RenderDataBuilder**：流式状态 → RenderData IR，三级锁（轮次/轮内/工具块）+ 重试回滚快照；`commitTurnBoundary()` 在 steer 注入时封存当前轮、开新一轮。依赖 ToolManager 的 prettyPrint/renderingConfig——这是它留在宿主的原因。
+- **RenderDataBuilder**：流式状态 → RenderData IR，三级锁（轮次/轮内/工具块）+ 重试回滚快照；`commitTurnBoundary()` 在 steer 注入时封存当前轮、开新一轮。依赖 ToolSet 的 prettyPrint/renderingConfig——这是它留在宿主的原因。
 - **ToolExecutor**：`ToolContext.session: BackendSession`；工具错误以字符串结果返回不断循环；abort → `[Interrupted]` + `shouldTerminate`。每批次执行前注册 `session.terminationHook`（审批空理由拒绝 → 终止会话）。
 - **generateStream.ts**：kosong `generate()` 的流式泵。
 

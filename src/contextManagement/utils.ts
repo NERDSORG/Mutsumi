@@ -2,12 +2,11 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as crypto from "crypto";
 import { TextDecoder } from "util";
-import { ToolManager } from "../tools.d/toolManager";
 import type { ToolContext } from "../tools.d/interface";
 import type { ContentPart } from "@moonshot-ai/kosong";
 import { ContextItem } from "../types";
 import { ToolSession } from "../tools.d/toolSession";
-import { getPreExecutionSession, withPreExecution } from "../tools.d/preExecution";
+import { PreExecutionToolController, getPreExecutionSession, withPreExecution } from "../tools.d/preExecution";
 
 /** Image regex: matches Markdown images in ![alt](uri) format */
 export const IMG_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
@@ -235,16 +234,18 @@ export async function executeToolCall(
 	args: any,
 	allowedUris: string[],
 ): Promise<string> {
-	const tm = ToolManager.getInstance();
+	const controller = PreExecutionToolController.getInstance();
 	const session = getPreExecutionSession();
 	const context: ToolContext = {
 		allowedUris: allowedUris,
 		session,
 		toolSession: new ToolSession(session.id, name),
-		callDescription: tm.getPrettyPrint(name, args, false),
+		// Pre-execution needs no pretty-print summary (it no longer produces an
+		// approval trace); the tool name is a sufficient placeholder.
+		callDescription: name,
 		signalTermination: () => {}, // No-op for user's explicit tool pre-execution
 	};
-	return await withPreExecution(() => tm.executeTool(name, args, context, false));
+	return await withPreExecution(() => controller.executeTool(name, args, context, false));
 }
 
 /**

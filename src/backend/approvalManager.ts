@@ -68,7 +68,8 @@ export class ApprovalRequestManager {
      * transactions to cancel a pending request) plus the resolution promise.
      */
     request(init: ApprovalRequestInit): { id: string | null; promise: Promise<ApprovalResolution> } {
-        const autoApprove = isAutoApproveEnabled() || isInPreExecution();
+        const preExecution = isInPreExecution();
+        const autoApprove = isAutoApproveEnabled() || preExecution;
 
         if (autoApprove) {
             const promise = (async (): Promise<ApprovalResolution> => {
@@ -76,7 +77,12 @@ export class ApprovalRequestManager {
                     const payload = await init.onApprove?.();
                     return { kind: 'approved', payload };
                 } finally {
-                    this.recordTrace(init, true);
+                    // Pre-execution calls are explicitly authored by the user
+                    // (`@[tool{...}]`), so they leave no approval trace; the
+                    // global auto-approve switch keeps its trace for auditing.
+                    if (!preExecution) {
+                        this.recordTrace(init, true);
+                    }
                 }
             })();
             return { id: null, promise };

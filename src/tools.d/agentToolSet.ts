@@ -3,16 +3,17 @@
  *
  * Builds the immutable ToolSet for a single agent run from its agentType
  * configuration (AgentTypeRegistry/ToolSetRegistry) plus the persisted MCP
- * tool selection snapshot. Lives in its own module so toolManager does not
- * depend on the agentTypes registries (toolSetRegistry already imports
- * ToolRegistry from toolManager).
+ * tool selection snapshot. Lives in its own module so toolSet/toolRegistry
+ * do not depend on the agentTypes registries (toolSetRegistry already
+ * imports ToolRegistry from toolRegistry).
  *
  * @module tools.d/agentToolSet
  */
 
 import { AgentTypeRegistry } from "../agentTypes/registry/agentTypeRegistry";
 import { ToolSetRegistry } from "../agentTypes/registry/toolSetRegistry";
-import { ToolRegistry, ToolSet } from "./toolManager";
+import { ToolRegistry } from "./toolRegistry";
+import { ToolSet } from "./toolSet";
 import { McpRegistry } from "./mcp/registry";
 import { McpToolAdapter } from "./mcp/tool";
 import type { McpToolSelection } from "./mcp/interfaces";

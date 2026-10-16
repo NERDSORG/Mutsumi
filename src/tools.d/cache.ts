@@ -5,7 +5,7 @@
  * This module provides a global, shared cache for tool execution results and
  * intermediate variables used by tools. It is used by both:
  * - ToolExecutor (for Agent runtime tool execution)
- * - ToolManager (for pre-execution in context management)
+ * - PreExecutionToolController (for pre-execution in context management)
  *
  * The cache is intentionally global and not tied to any specific Agent,
  * as tool results and intermediate variables depend only on the code state,

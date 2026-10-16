@@ -3,7 +3,7 @@
  * payload (hydration).
  *
  * `buildInteractionRenderBlocks` turns a group of assistant/tool messages
- * into committed RenderBlocks (it needs ToolManager/MCP registry knowledge,
+ * into committed RenderBlocks (it needs tool display/MCP registry knowledge,
  * which only exists in the host). Frontends render the snapshot as-is and
  * then follow incremental `session.output` events.
  *
@@ -15,7 +15,7 @@ import { extractText } from '@moonshot-ai/kosong';
 import type { ContentPart, ThinkPart } from '@moonshot-ai/kosong';
 import type { AgentMessage, AgentMetadata } from '../types';
 import type { RenderBlock } from '../shared/renderTypes';
-import { ToolManager } from '../tools.d/toolManager';
+import { getToolRenderConfig, getToolSummary } from '../tools.d/toolDisplay';
 import { collectRulesRecursively } from '../contextManagement/prompts';
 import { SkillManager } from '../contextManagement/skillManager';
 import { McpRegistry } from '../tools.d/mcp/registry';
@@ -63,9 +63,9 @@ export function buildInteractionRenderBlocks(group: AgentMessage[], isSubAgent: 
             const toolName = mapped?.name ?? m.name ?? 'unknown';
             const args = mapped?.args ?? {};
             const prettyPrintSummary = mapped
-                ? ToolManager.getInstance().getPrettyPrint(toolName, args, isSubAgent)
+                ? getToolSummary(toolName, args, isSubAgent)
                 : `Tool Call: ${toolName}`;
-            const renderingConfig = ToolManager.getInstance().getToolRenderingConfig(toolName, isSubAgent);
+            const renderingConfig = getToolRenderConfig(toolName, isSubAgent);
 
             blocks.push({
                 type: 'toolCall',

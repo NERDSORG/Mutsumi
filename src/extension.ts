@@ -17,7 +17,7 @@ import { activateEditSupport } from "./tools.d/edit_file";
 import { CodebaseService } from "./tools.d/codebase/service";
 import { SkillManager } from "./contextManagement/skillManager";
 import { t } from "./i18n";
-import { ToolRegistry } from "./tools.d/toolManager";
+import { ToolRegistry } from "./tools.d/toolRegistry";
 import { debugLogger } from "./debugLogger";
 import { toolsLogger } from "./tools.d/toolsLogger";
 import { clearToolCache } from "./tools.d/cache";

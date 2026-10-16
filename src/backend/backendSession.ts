@@ -21,7 +21,7 @@ import type { AgentMessage, AgentMetadata } from '../types';
 import type { McpToolSelection } from '../tools.d/mcp/interfaces';
 import type { RenderData } from '../shared/renderTypes';
 import { RenderDataBuilder } from '../agent/renderDataBuilder';
-import { ToolSet } from '../tools.d/toolManager';
+import { ToolSet } from '../tools.d/toolSet';
 import { createEmptyToolSet, createToolSetForAgent } from '../tools.d/agentToolSet';
 import type { ToolContext } from '../tools.d/interface';
 import type { AgentRunOptions } from '../agent/interfaces';
