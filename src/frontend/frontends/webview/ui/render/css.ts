@@ -72,6 +72,37 @@ export const RENDERER_CSS = `
   color: var(--vscode-descriptionForeground);
 }
 
+/* Collapsible rows (reasoning and tool calls) carry a disclosure chevron
+   trailing the summary text. renderCore injects the element, so the icon
+   class itself is the gate — raw <details> in model markdown never get one.
+   opacity keeps it hidden until the summary is hovered — the same reveal
+   pattern as the turn menu bar. The glyph is always chevron-right: [open]
+   rotates it into a chevron-down, so expanding and collapsing play a
+   rotation instead of a glyph swap. */
+.mutsumi-block > details > summary > .mutsumi-summary-chevron {
+  /* Trailing-icon spacing, mirrored from the leading icons (which carry
+     margin-right). Same inline treatment as .mutsumi-label-icon:
+     codicon.css ships a fixed 16px glyph that has to follow the text size. */
+  margin-left: 6px;
+  font-size: 1em;
+  vertical-align: text-bottom;
+  opacity: 0;
+  /* The color leg repeats the summary-wide timing because this shorthand
+     replaces the inherited "transition: color" rule rather than merging. */
+  transition:
+    color .18s cubic-bezier(.2, 0, 0, 1),
+    opacity .15s,
+    transform .18s cubic-bezier(.2, 0, 0, 1);
+}
+
+.mutsumi-block > details > summary:hover > .mutsumi-summary-chevron {
+  opacity: 1;
+}
+
+.mutsumi-block > details[open] > summary > .mutsumi-summary-chevron {
+  transform: rotate(90deg);
+}
+
 /* Expand/collapse animation, pure CSS: ::details-content is the engine's own
    wrapper around everything but the summary, so no DOM change is needed.
    Engines without the pseudo-element (or without interpolate-size) simply

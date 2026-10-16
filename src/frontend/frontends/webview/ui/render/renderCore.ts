@@ -174,6 +174,16 @@ function prepareCodeBlocks(
   });
 }
 
+/**
+ * Append the disclosure chevron shared by collapsible rows (reasoning and
+ * tool calls). The element is always in the DOM; CSS owns the hover-only
+ * reveal and the [open] rotation, so toggling plays a rotation animation
+ * with no JS state.
+ */
+function appendSummaryChevron(summary: HTMLElement): void {
+  summary.appendChild(codicon('chevron-right', 'mutsumi-summary-chevron'));
+}
+
 /** Build an unhighlighted RenderBlock DOM element. */
 function renderBlock(block: RenderBlock): HTMLElement {
   const div = document.createElement('div');
@@ -190,6 +200,7 @@ function renderBlock(block: RenderBlock): HTMLElement {
       const summary = document.createElement('summary');
       summary.appendChild(codicon('lightbulb', 'mutsumi-label-icon'));
       summary.appendChild(document.createTextNode(label('chat.reasoningSummary')));
+      appendSummaryChevron(summary);
       details.appendChild(summary);
       const content = document.createElement('div');
       content.className = 'mutsumi-reasoning-content';
@@ -215,6 +226,7 @@ function renderBlock(block: RenderBlock): HTMLElement {
       summary.appendChild(document.createTextNode(
         `${leading ? leading.rest : block.summary}${block.isStreaming ? ' ...' : ''}`,
       ));
+      appendSummaryChevron(summary);
       details.appendChild(summary);
 
       const argsDiv = document.createElement('div');
