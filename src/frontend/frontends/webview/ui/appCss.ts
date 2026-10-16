@@ -385,6 +385,43 @@ body {
   padding: 0 4px;
 }
 
+/* Generating indicator of the live turn: three pulsing dots below the last
+   block. TurnRenderer owns the element; app.ts gates visibility with
+   data-generating on the turn row, the same declarative split as the input
+   area's send/interrupt swap. */
+.mutsumi-turn-generating {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  color: var(--vscode-descriptionForeground);
+}
+
+.mutsumi-turn-row[data-generating="true"] .mutsumi-turn-generating {
+  display: flex;
+}
+
+.mutsumi-turn-generating > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: mutsumi-generating-pulse 1.2s ease-in-out infinite;
+}
+
+.mutsumi-turn-generating > span:nth-child(2) {
+  animation-delay: .15s;
+}
+
+.mutsumi-turn-generating > span:nth-child(3) {
+  animation-delay: .3s;
+}
+
+@keyframes mutsumi-generating-pulse {
+  0%, 60%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+}
+
 .mutsumi-menu-bar {
   display: flex;
   gap: 4px;

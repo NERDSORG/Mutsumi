@@ -258,6 +258,7 @@ export class App {
             // Defensive: output without a preceding userMessageCommitted
             // (e.g. a run that started before this panel opened).
             this.liveTurn = this.appendTurnRow(null, -1);
+            this.refreshGeneratingFlag();
         }
         this.liveTurn.renderer.update(renderData);
         this.liveTurn.lastRenderData = renderData;
@@ -482,6 +483,22 @@ export class App {
 
         // Input area widgets
         this.inputArea.update(this.state);
+
+        this.refreshGeneratingFlag();
+    }
+
+    /**
+     * Reflect "the live turn is generating" as a data attribute on its row.
+     * TurnRenderer owns the indicator element; CSS gates its visibility on
+     * this attribute, the same declarative split as the input area's
+     * send/interrupt swap.
+     */
+    private refreshGeneratingFlag(): void {
+        this.flowEl.querySelector('.mutsumi-turn-row[data-generating]')
+            ?.removeAttribute('data-generating');
+        if (this.state.status === 'running' && this.liveTurn) {
+            this.liveTurn.rowEl.setAttribute('data-generating', 'true');
+        }
     }
 
     /** Re-derive context panel data from the latest metadata. */

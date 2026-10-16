@@ -589,8 +589,19 @@ export class TurnRenderer {
     committedContainer.className = 'mutsumi-committed';
     const activeContainer = document.createElement('div');
     activeContainer.className = 'mutsumi-active';
+    // The generating indicator is appended last so it sits after the turn's
+    // final block. It stays outside the reconciled active tree; app.ts gates
+    // its visibility with the row's data-generating attribute.
+    const generatingIndicator = document.createElement('div');
+    generatingIndicator.className = 'mutsumi-turn-generating';
+    generatingIndicator.append(
+      document.createElement('span'),
+      document.createElement('span'),
+      document.createElement('span'),
+    );
     hostElement.appendChild(committedContainer);
     hostElement.appendChild(activeContainer);
+    hostElement.appendChild(generatingIndicator);
 
     this.cache = {
       committedContainer,
