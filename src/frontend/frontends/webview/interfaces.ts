@@ -38,8 +38,8 @@ export interface CompletionToolInfo {
     serverId?: string;
 }
 
-/** `searchCompletions` RPC result: fuzzy-ranked files + root directory rows. */
-export interface CompletionSearchResult {
+/** `listWorkspaceFiles` RPC result: the full unfiltered workspace file + root directory list. */
+export interface WorkspaceFileList {
     files: string[];
     dirs: string[];
 }

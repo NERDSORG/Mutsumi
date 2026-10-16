@@ -5,6 +5,9 @@
  * - Opens when an `input` event leaves the caret right after an `@`: typing
  *   `@`, backspacing down to an existing `@`, or pasting text ending in `@`.
  *   Caret moves never open it.
+ * - On open, the full workspace file list and the tool list are fetched once
+ *   via RPC (the host serves them from a 60s cache); every keystroke then
+ *   re-filters them locally with `fuzzyFilter` — zero RPC while typing.
  * - While open, the searched string is `value.slice(tokenStart + 1, caret)`,
  *   recomputed on `input` / `selectionchange`; a query change resets the
  *   highlight to the top.
@@ -24,7 +27,7 @@ import { rpc } from './bridge';
 import { codicon } from './codicon';
 import { PopupBase } from './popup';
 import { fuzzyFilter } from '../../../../shared/fuzzyMatch';
-import type { CompletionSearchResult, CompletionToolInfo, WebviewLabelKey } from '../interfaces';
+import type { CompletionToolInfo, WebviewLabelKey, WorkspaceFileList } from '../interfaces';
 
 /** One selectable row. */
 type Entry =
@@ -40,17 +43,18 @@ export interface CompletionMenuCallbacks {
     label(key: WebviewLabelKey): string;
 }
 
-const QUERY_DEBOUNCE_MS = 120;
+/** Best-ranked rows shown per category. */
+const DISPLAY_LIMIT = 50;
 
 export class CompletionMenu extends PopupBase {
     private tokenStart = -1;
     private lastQuery = '';
     private entries: Entry[] = [];
     private activeIndex = 0;
-    /** Cached for the lifetime of one open session; refetched on next open. */
-    private tools: CompletionToolInfo[] | null = null;
-    private querySeq = 0;
-    private debounceTimer: number | undefined;
+    /** Full lists for the lifetime of one open session; refetched on next open. */
+    private files: string[] = [];
+    private dirs: string[] = [];
+    private tools: CompletionToolInfo[] = [];
 
     constructor(
         composerEl: HTMLElement,
@@ -80,14 +84,13 @@ export class CompletionMenu extends PopupBase {
         const before = this.textarea.value.slice(0, caret);
         if (collapsed && before.endsWith('@')) {
             // Caret now sits right after an `@` (typed, backspaced down to,
-            // or pasted): (re)open; close() first resets state and kills
-            // in-flight queries.
+            // or pasted): (re)open; close() first resets state.
             this.close();
             this.tokenStart = before.length - 1;
             this.lastQuery = '';
             this.activeIndex = 0;
             this.open();
-            void this.runQuery(++this.querySeq);
+            void this.fetchLists();
             return;
         }
         if (this.isOpen()) {
@@ -129,9 +132,9 @@ export class CompletionMenu extends PopupBase {
     }
 
     override close(): void {
-        window.clearTimeout(this.debounceTimer);
-        this.querySeq++; // invalidate in-flight responses
-        this.tools = null;
+        this.files = [];
+        this.dirs = [];
+        this.tools = [];
         this.tokenStart = -1;
         this.entries = [];
         super.close();
@@ -153,55 +156,65 @@ export class CompletionMenu extends PopupBase {
         if (query !== this.lastQuery) {
             this.lastQuery = query;
             this.activeIndex = 0;
-            this.scheduleQuery();
+            this.applyFilter();
         }
     }
 
-    private scheduleQuery(): void {
-        window.clearTimeout(this.debounceTimer);
-        const seq = ++this.querySeq;
-        this.debounceTimer = window.setTimeout(() => void this.runQuery(seq), QUERY_DEBOUNCE_MS);
-    }
-
-    private async runQuery(seq: number): Promise<void> {
-        const query = this.lastQuery;
+    /**
+     * One-shot fetch on open: the full workspace file list (served from the
+     * host's cache) plus the tool list. Dropped when the menu has since
+     * closed.
+     */
+    private async fetchLists(): Promise<void> {
         try {
-            const [result, tools] = await Promise.all([
-                rpc<CompletionSearchResult>('searchCompletions', { query }),
-                this.tools
-                    ? Promise.resolve(this.tools)
-                    : rpc<CompletionToolInfo[]>('listCompletionTools'),
+            const [list, tools] = await Promise.all([
+                rpc<WorkspaceFileList>('listWorkspaceFiles'),
+                rpc<CompletionToolInfo[]>('listCompletionTools'),
             ]);
-            if (seq !== this.querySeq || !this.isOpen()) {
-                return; // superseded by a newer query
+            if (!this.isOpen()) {
+                return;
             }
+            this.files = list.files;
+            this.dirs = list.dirs;
             this.tools = tools;
-            const matchedTools = fuzzyFilter(query, tools, t => t.displayName);
-            // Group order: files, directories, built-in tools, then MCP tools
-            // per server.
-            const builtins = matchedTools.filter(t => !t.serverId);
-            const byServer = new Map<string, CompletionToolInfo[]>();
-            for (const tool of matchedTools) {
-                if (!tool.serverId) {
-                    continue;
-                }
-                const bucket = byServer.get(tool.serverId) ?? [];
-                bucket.push(tool);
-                byServer.set(tool.serverId, bucket);
-            }
-            this.entries = [
-                ...result.files.map(path => ({ kind: 'file', path }) as Entry),
-                ...result.dirs.map(path => ({ kind: 'dir', path }) as Entry),
-                ...builtins.map(tool => ({ kind: 'tool', tool }) as Entry),
-                ...[...byServer.values()].flat().map(tool => ({ kind: 'tool', tool }) as Entry),
-            ];
-            this.render();
+            this.applyFilter();
         } catch {
-            if (seq === this.querySeq && this.isOpen()) {
+            if (this.isOpen()) {
                 this.entries = [];
                 this.render();
             }
         }
+    }
+
+    /**
+     * Local fuzzy re-filter of the session lists against the current query;
+     * synchronous, so it runs on every keystroke with no RPC. Applies the
+     * per-category display cap after ranking.
+     */
+    private applyFilter(): void {
+        const query = this.lastQuery;
+        const files = fuzzyFilter(query, this.files, p => p).slice(0, DISPLAY_LIMIT);
+        const dirs = fuzzyFilter(query, this.dirs, d => d).slice(0, DISPLAY_LIMIT);
+        const matchedTools = fuzzyFilter(query, this.tools, t => t.displayName);
+        // Group order: files, directories, built-in tools, then MCP tools
+        // per server.
+        const builtins = matchedTools.filter(t => !t.serverId);
+        const byServer = new Map<string, CompletionToolInfo[]>();
+        for (const tool of matchedTools) {
+            if (!tool.serverId) {
+                continue;
+            }
+            const bucket = byServer.get(tool.serverId) ?? [];
+            bucket.push(tool);
+            byServer.set(tool.serverId, bucket);
+        }
+        this.entries = [
+            ...files.map(path => ({ kind: 'file', path }) as Entry),
+            ...dirs.map(path => ({ kind: 'dir', path }) as Entry),
+            ...builtins.map(tool => ({ kind: 'tool', tool }) as Entry),
+            ...[...byServer.values()].flat().map(tool => ({ kind: 'tool', tool }) as Entry),
+        ];
+        this.render();
     }
 
     private moveActive(delta: number): void {
