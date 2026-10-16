@@ -167,8 +167,9 @@ export class AgentRegistry {
      * Create a new agent: resolve defaults, write the .mtm file, register,
      * broadcast `session.created`, and return the materialized session.
      *
-     * The initial prompt (if any) is not written into the file context; it is
-     * kept on the registry entry and enqueued by the caller
+     * The initial prompt (if any) is not written into the file context and is
+     * not retained on the registry entry; it is only used here to derive a
+     * default name and is enqueued by the caller
      * (`userMessage.send` / dispatch approval), so it passes through the
      * `assembleUserMessage` pipeline exactly once.
      */
@@ -225,7 +226,6 @@ export class AgentRegistry {
             openClientCount: 0,
             isRunning: false,
             isTaskFinished: false,
-            prompt: options.prompt,
             childIds: new Set(),
         };
         this.agents.set(uuid, info);

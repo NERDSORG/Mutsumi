@@ -37,7 +37,6 @@ export class AgentBackend {
     /** Materialized sessions by uuid (never evicted). */
     private readonly sessions = new Map<string, BackendSession>();
     private readonly sessionDeps: BackendSessionDeps;
-    private focusedSessionId: string | null = null;
     private preExecutionSession: BackendSession | null = null;
 
     constructor() {
@@ -185,8 +184,10 @@ export class AgentBackend {
                     this.registry.emitChanged();
                 }
             },
-            'session.focus': payload => {
-                this.focusedSessionId = payload.sessionId;
+            'session.focus': () => {
+                // Intentional no-op: the backend does not currently consume
+                // focus state. The handler is kept because the mapped FtB
+                // handler type requires every event to be registered.
             },
             'session.delete': payload => this.guard(payload.sessionId, async () => {
                 const entry = this.registry.get(payload.sessionId);

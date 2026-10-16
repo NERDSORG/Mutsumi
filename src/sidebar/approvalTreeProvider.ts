@@ -11,6 +11,11 @@ export type ApprovalSidebarItem = ApprovalTreeItem;
  * @description Approval request tree data provider: the always-on fallback
  * frontend for approvals. Shows tool approval requests (from the backend
  * ApprovalRequestManager).
+ *
+ * As the in-process fallback frontend, this component directly subscribes to
+ * `backend.approvals.onDidChangeRequests` and reads `getAllRequests()` — an
+ * exception explicitly sanctioned by the architecture contract (see the
+ * `backend/approvalManager` module docstring).
  * @class ApprovalTreeDataProvider
  * @implements {vscode.TreeDataProvider<ApprovalSidebarItem>}
  */

@@ -198,13 +198,11 @@ export class RenderDataBuilder {
      * arguments, and looks up pretty print summaries and rendering configs.
      * @param {ToolCall[]} partialToolCalls - Partial tool calls in kosong flat shape
      * @param {ToolSet} toolSet - Tool set instance for looking up tool metadata
-     * @param {boolean} _isSubAgent - Whether the caller is a sub-agent session
      * @returns {RenderBlock[]} Pending tool call blocks
      */
     formatPendingToolCalls(
         partialToolCalls: ToolCall[] | undefined,
-        toolSet: ToolSet,
-        _isSubAgent?: boolean
+        toolSet: ToolSet
     ): RenderBlock[] {
         if (!partialToolCalls || partialToolCalls.length === 0) {
             return [];

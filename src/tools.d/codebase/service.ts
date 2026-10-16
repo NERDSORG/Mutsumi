@@ -46,12 +46,6 @@ export class CodebaseService {
     private context?: vscode.ExtensionContext;
 
     /**
-     * In-memory cache for file outlines: uri string -> array of root outline nodes.
-     * @private
-     */
-    private outlineCache: Map<string, OutlineNode[]> = new Map();
-
-    /**
      * Private constructor to enforce singleton pattern.
      * @private
      */
@@ -145,7 +139,6 @@ export class CodebaseService {
     /**
      * Generates a structural outline of a source file.
      * Parses the file content and extracts definitions like classes, functions, methods, etc.
-     * Results are cached for subsequent calls.
      * @param {vscode.Uri} uri - The URI of the file to analyze
      * @param {string} [content] - Optional file content. If not provided, the file will be read from disk
      * @returns {Promise<OutlineNode[] | null>} Array of root outline nodes or null if parsing fails
@@ -178,8 +171,6 @@ export class CodebaseService {
             const config = LANGUAGE_CONFIGS[langId];
             const nodes = this.extractNodes(tree.rootNode, config, fileContent);
             tree.delete();
-
-            this.outlineCache.set(uri.toString(), nodes);
 
             return nodes;
         } catch (e) {

@@ -3,8 +3,7 @@
  * @module agent/types
  * @description Type aliases, constants, and functions. Pure interfaces
  * (AgentRunOptions, StreamGenerateOptions/Result,
- * RoundSnapshot, ToolExecutorCallbacks/Result, TitleGeneratorConfig,
- * GenerateTitleConfig) live in `agent/interfaces.ts`.
+ * RoundSnapshot, ToolExecutorCallbacks/Result) live in `agent/interfaces.ts`.
  */
 
 import type { AgentStateInfo, AgentRuntimeStatus } from '../types';

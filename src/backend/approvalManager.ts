@@ -9,6 +9,12 @@
  *
  * Rejection reasons arrive with the respond payload.
  *
+ * Besides the BtF events, this module additionally exposes the
+ * `onDidChangeRequests` VSCode event for the in-process sidebar approval
+ * tree (the always-on fallback frontend) to subscribe to directly. This is
+ * a deliberate exception to the event-bus-only rule; cross-process
+ * frontends still go through the EventBus exclusively.
+ *
  * @module backend/approvalManager
  */
 

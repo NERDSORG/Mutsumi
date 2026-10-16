@@ -56,7 +56,7 @@ export interface BackendSessionOptions {
 export interface CreateAgentOptions {
     agentType: string;
     name?: string;
-    /** Initial prompt; kept on the registry entry, enqueued by the caller. */
+    /** Initial prompt; enqueued by the caller. */
     prompt?: string;
     /** Pre-generated uuid override (dispatch pre-generates to embed identity blocks). */
     uuid?: string;
@@ -125,5 +125,4 @@ export interface DispatchRequestItem {
     prompt: string;
     allowed_uris: string[];
     agent_type?: string;
-    modelSelection?: ModelSelection;
 }

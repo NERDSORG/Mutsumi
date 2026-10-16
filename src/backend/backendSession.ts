@@ -736,7 +736,6 @@ export class BackendSession {
                 agentType,
                 prompt: fullPrompt,
                 allowedUris: sub.allowed_uris,
-                modelSelection: sub.modelSelection,
                 parentId: this.sessionId,
                 uuid,
             });

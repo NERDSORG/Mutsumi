@@ -7,7 +7,7 @@
  */
 
 import type { ChatProvider, Message, ProviderType, Tool, ToolCall } from '@moonshot-ai/kosong';
-import type { AgentMessage, ModelSelection } from '../types';
+import type { AgentMessage } from '../types';
 import type { RenderBlock } from '../shared/renderTypes';
 
 /**
@@ -102,28 +102,4 @@ export interface ToolExecutionResult {
 	shouldTerminate: boolean;
 	/** Whether this is a successful task completion (e.g., from task_finish tool) */
 	isTaskComplete: boolean;
-}
-
-/**
- * Configuration interface for title generation.
- * @interface TitleGeneratorConfig
- */
-export interface TitleGeneratorConfig {
-    /** Model selection pair to use for title generation */
-    modelSelection?: ModelSelection;
-}
-
-/**
- * Self-contained configuration for a title generation run.
- * @interface GenerateTitleConfig
- */
-export interface GenerateTitleConfig {
-    /** API key for the resolved provider */
-    apiKey: string;
-    /** Base URL for the provider's API */
-    baseUrl: string | undefined;
-    /** Model identifier to use */
-    model: string;
-    /** Wire protocol type of the resolved provider */
-    providerType: ProviderType;
 }

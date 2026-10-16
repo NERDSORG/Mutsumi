@@ -100,7 +100,6 @@ export class AgentRunner {
         const builder = session.renderDataBuilder ?? (session.renderDataBuilder = new RenderDataBuilder());
 
         const allowedUris = session.metadata.allowed_uris || ['/'];
-        const isSubAgent = session.isSubAgent;
 
         // Initialize ToolExecutor here since we needed the builder
         if (!this.toolExecutor) {
@@ -108,7 +107,6 @@ export class AgentRunner {
                 this.toolSet,
                 allowedUris,
                 this.session,
-                isSubAgent,
                 builder
             );
         }
@@ -145,8 +143,7 @@ export class AgentRunner {
 
                         const pendingBlocks = builder.formatPendingToolCalls(
                             pendingTools,
-                            this.toolSet,
-                            isSubAgent
+                            this.toolSet
                         );
 
                         const renderData = builder.updateActive(content, reasoning, pendingBlocks);

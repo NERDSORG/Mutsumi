@@ -190,16 +190,13 @@ export interface AgentStateInfo {
     /** File URI string where the agent is stored */
     fileUri: string;
 
-    /** Number of frontends (panels, ACP connections) currently displaying this session */
+    /** Number of frontends (panels) currently displaying this session */
     openClientCount: number;
     /** Whether the agent is currently running */
     isRunning: boolean;
     /** Whether the agent task has finished */
     isTaskFinished: boolean;
-    
-    /** Cached prompt text for the agent */
-    prompt?: string;
-    
+
     /** Set of child agent UUIDs for building the tree structure */
     childIds?: Set<string>;
 }

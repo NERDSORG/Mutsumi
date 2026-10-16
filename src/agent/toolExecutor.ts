@@ -33,16 +33,13 @@ function raceAbort<T>(signal: AbortSignal, p: Thenable<T>): Promise<T> {
 	});
 }
 
-// Re-export for statusBar
-export { clearToolCache, getToolCacheSize } from "../tools.d/cache";
-
 /**
  * Executes tool calls from LLM responses.
  * @description Manages the execution of tool calls, handling context building,
  * error handling, and result collection.
  * @class ToolExecutor
  * @example
- * const executor = new ToolExecutor(tools, allowedUris, session, isSubAgent, builder);
+ * const executor = new ToolExecutor(tools, allowedUris, session, builder);
  * const result = await executor.executeTools(toolCalls, abortSignal, callbacks);
  */
 export class ToolExecutor {
@@ -52,14 +49,12 @@ export class ToolExecutor {
 	 * @param {ToolSet} toolSet - Tool set for executing tools
 	 * @param {string[]} allowedUris - List of allowed URIs for the agent
 	 * @param {BackendSession} session - The agent session
-	 * @param {boolean} isSubAgent - Whether this is a sub-agent
 	 * @param {RenderDataBuilder} renderDataBuilder - RenderData builder for formatting tool calls
 	 */
 	constructor(
 		private toolSet: ToolSet,
 		private allowedUris: string[],
 		private session: BackendSession,
-		_isSubAgent: boolean,
 		private renderDataBuilder: RenderDataBuilder,
 	) {}
 
