@@ -188,7 +188,7 @@ debugLogger / toolsLogger 初始化
 8. WebView UI 改动：`ui/` 下代码只能 import 纯类型/纯工具（不能 import 宿主模块）；静态文案由宿主 `t()` 翻译后经 initial-data 注入。
 9. 新增命令/菜单：同步 package.json（contributes + menus when）与 l10n bundle（en/zh-cn）。
 10. 不修改 `docs/vscode-api.md`（外部 API 快照，内容极长，只能 grep）。
-11. 压缩功能当前不存在；其回归挂钩的设计见 `docs/AGENT_BACKEND_REFACTOR_DESIGN_CN.md`。
+11. 压缩功能当前不存在；相关回归挂钩的设计文档已随实现一并移除，恢复该功能时需重新设计。
 
 ---
 
@@ -209,10 +209,6 @@ pnpm run package       # 出 .vsix（vsce package；自动触发 prepublish = �
 
 ## 10. 重要参考文档
 
-- `docs/AGENT_BACKEND_REFACTOR_DESIGN_CN.md` — 后端架构的完整设计蓝本：事件协议、运行语义、行为契约
-- `docs/mcp-host-final-target.md` — MCP 宿主最终目标状态
-- `docs/AGENT_TYPES_DESIGN.md`（及 `_CN`）— AgentType 角色系统设计
-- `docs/PROMPT_ENGINEERING_DESIGN.md`（及 `_CN`）— Prompt 工程与上下文设计
 - `src/types.ts` — 核心类型（`AgentMetadata`、`AgentMessage`、`AgentStateInfo`）
 
 ---

@@ -13,7 +13,7 @@ export const dispatchSubagentsTool: ITool = {
             properties: {
                 context_broadcast: { 
                     type: 'string', 
-                    description: 'Broadcast context information injected into each sub-agent\'s prompt. This is copied to each sub-agent independently - sub-agents cannot communicate with each other. Must include: overall task requirements, brief description of each sub-agent\'s task, and the file URIs each sub-agent is responsible for. This ensures all sub-agents understand the global task scope and other sub-agents\' work areas to prevent unauthorized operations.' 
+                    description: 'Broadcast context information injected into each sub-agent\'s prompt. This is copied to each sub-agent independently. Each sub-agent also receives the session ids of its parent and sibling agents and can message any of them via the communicate tool. Must include: overall task requirements, brief description of each sub-agent\'s task, and the file URIs each sub-agent is responsible for. This ensures all sub-agents understand the global task scope and other sub-agents\' work areas to prevent unauthorized operations.'
                 },
                 sub_agents: {
                     type: 'array',
