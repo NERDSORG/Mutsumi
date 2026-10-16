@@ -1,5 +1,5 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS, withAbortableToken } from "../utils";
+import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS, withAbortableToken, relativeUriDisplayPath } from "../utils";
 import * as vscode from "vscode";
 
 export const searchFileNameIncludesTool: ITool = {
@@ -52,16 +52,7 @@ export const searchFileNameIncludesTool: ITool = {
 			if (files.length === 0) return "No files found.";
 
 			return files
-				.map((uri) => {
-					return uri.toString().startsWith(rootUri.toString())
-						? uri
-								.toString()
-								.substring(
-									rootUri.toString().length +
-										(rootUri.toString().endsWith("/") ? 0 : 1),
-								)
-						: vscode.workspace.asRelativePath(uri);
-				})
+				.map((uri) => relativeUriDisplayPath(rootUri, uri))
 				.join("\n");
 		} catch (err: any) {
 			if (abortSignal.aborted) {

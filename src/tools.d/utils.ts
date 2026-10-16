@@ -219,6 +219,26 @@ function relativeDisplayPath(root: string, p: string): string | null {
 }
 
 /**
+ * Display `fileUri` relative to `rootUri` for human-facing output.
+ * If `fileUri` is strictly under `rootUri` (URI-string prefix match with a
+ * `/` boundary, so `/a/b` does not falsely match `/a/bc.txt`), the root
+ * prefix and the separating slash are stripped. Otherwise falls back to
+ * `vscode.workspace.asRelativePath(fileUri)` unchanged.
+ */
+export function relativeUriDisplayPath(
+	rootUri: vscode.Uri,
+	fileUri: vscode.Uri,
+): string {
+	const rootStr = rootUri.toString();
+	const fileStr = fileUri.toString();
+	const prefix = rootStr.endsWith("/") ? rootStr : `${rootStr}/`;
+	if (fileStr.startsWith(prefix)) {
+		return fileStr.substring(prefix.length);
+	}
+	return vscode.workspace.asRelativePath(fileUri);
+}
+
+/**
  * Bridge an AbortSignal to a VS Code CancellationToken for a single async call.
  * Cancels the token when the signal aborts and disposes resources afterwards.
  */

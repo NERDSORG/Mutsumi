@@ -1,5 +1,5 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS } from "../utils";
+import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS, relativeUriDisplayPath } from "../utils";
 import * as vscode from "vscode";
 import { CodebaseService } from "../codebase/service";
 
@@ -42,13 +42,7 @@ export const projectOutlineTool: ITool = {
 				try {
 					const nodes = await codebaseService.getFileOutline(fileUri);
 					if (nodes && nodes.length > 0) {
-						// Display relative path safely
-						const relPath = fileUri.toString().startsWith(rootUri.toString())
-							? fileUri.toString().substring(rootUri.toString().length)
-							: vscode.workspace.asRelativePath(fileUri);
-						const cleanPath = relPath.startsWith("/")
-							? relPath.substring(1)
-							: relPath;
+						const cleanPath = relativeUriDisplayPath(rootUri, fileUri);
 
 						const treeStr = codebaseService.formatOutline(nodes);
 						return `File: ${cleanPath}\n${treeStr}`;

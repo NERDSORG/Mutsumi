@@ -1,5 +1,5 @@
 import type { ITool, ToolContext } from "../interface";
-import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS, withAbortableToken } from "../utils";
+import { resolveUri, simplifyUri, COMMON_IGNORE_GLOBS, withAbortableToken, relativeUriDisplayPath } from "../utils";
 import { getBrief, withBrief } from "../brief";
 import * as vscode from "vscode";
 import { TextDecoder } from "util";
@@ -243,14 +243,7 @@ async function searchDirectory(
 			const content = new TextDecoder().decode(bytes);
 			if (content.includes("\0")) continue; // skip binary
 			const fileLines = content.split(/\r?\n/);
-			const relPath = fileUri
-				.toString()
-				.startsWith(rootUri.toString())
-				? fileUri.toString().substring(rootUri.toString().length)
-				: vscode.workspace.asRelativePath(fileUri);
-			const displayPath = relPath.startsWith("/")
-				? relPath.substring(1)
-				: relPath;
+			const displayPath = relativeUriDisplayPath(rootUri, fileUri);
 			for (let idx = 0; idx < fileLines.length; idx++) {
 				const line = fileLines[idx];
 				if (matcher.match(line)) {
