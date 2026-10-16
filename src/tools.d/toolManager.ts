@@ -26,17 +26,10 @@ import { projectOutlineTool } from "./tools/project_outline";
 import { getWarningErrorTool } from "./tools/diagnostics";
 import { inspectShellTaskTool } from "./tools/inspect_shell_task";
 import { killShellTaskTool } from "./tools/kill_shell_task";
-import { AgentTypeRegistry } from "../agentTypes/registry/agentTypeRegistry";
-import { ToolSetRegistry } from "../agentTypes/registry/toolSetRegistry";
 import type { Tool } from "@moonshot-ai/kosong";
 import { getCachedResult, setCachedResult } from "./cache";
 import { McpRegistry } from "./mcp/registry";
 import { McpToolAdapter } from "./mcp/tool";
-import type { McpToolSelection } from "./mcp/interfaces";
-import { normalizeMcpToolSelections } from "./mcp/utils";
-
-// Re-export cache functions for convenience
-export { getToolCacheSize, clearToolCache } from "./cache";
 
 /**
  * Tool set configuration for different agent types.
@@ -209,33 +202,7 @@ export class ToolSet {
  */
 export class ToolRegistry {
 	private static commonTools: ITool[] = [];
-	private static toolNameMap: Map<string, ITool> = new Map();
 	private static initialized = false;
-
-	/**
-	 * Mapping from config tool names to actual tool exports.
-	 * This ensures consistent naming between config and implementation.
-	 */
-	private static readonly TOOL_NAME_MAPPING: Record<string, ITool> = {
-		read: readFileTool,
-		glob: globTool,
-		grep: grepTool,
-		shell: shellTool,
-		write: createOrReplaceTool,
-		edit: editFileSearchReplaceTool,
-		find_filename: searchFileNameIncludesTool,
-		get_env_var: getEnvVarTool,
-		system_info: systemInfoTool,
-		mkdir: mkdirTool,
-		project_outline: projectOutlineTool,
-		diagnostics: getWarningErrorTool,
-		inspect_shell_task: inspectShellTaskTool,
-		kill_shell_task: killShellTaskTool,
-		dispatch_subagents: dispatchSubagentsTool,
-		task_finish: taskFinishTool,
-		get_agent_types: getAgentTypesTool,
-		communicate: communicateTool,
-	};
 
 	/**
 	 * Initializes the global tool registry.
@@ -265,12 +232,6 @@ export class ToolRegistry {
 			communicateTool,
 		];
 
-		// Build the tool name map for quick lookup
-		ToolRegistry.toolNameMap.clear();
-		for (const [name, tool] of Object.entries(ToolRegistry.TOOL_NAME_MAPPING)) {
-			ToolRegistry.toolNameMap.set(name, tool);
-		}
-
 		ToolRegistry.initialized = true;
 	}
 
@@ -291,50 +252,6 @@ export class ToolRegistry {
 	 */
 	static getTaskFinishTool(): ITool {
 		return taskFinishTool;
-	}
-
-	/**
-	 * Gets a tool by its config name.
-	 * @param {string} name - Tool name as used in config (e.g., 'read')
-	 * @returns {ITool | undefined} The tool if found, undefined otherwise
-	 */
-	static getToolByName(name: string): ITool | undefined {
-		if (!ToolRegistry.initialized) {
-			ToolRegistry.initialize();
-		}
-		return ToolRegistry.toolNameMap.get(name);
-	}
-
-	/**
-	 * Builds a tool set from an array of tool names.
-	 * Only includes tools that are registered and available.
-	 * @param {string[]} names - Array of tool names as used in config
-	 * @returns {ITool[]} Array of resolved tools (excludes unavailable tools)
-	 */
-	static buildToolSetFromNames(names: string[]): ITool[] {
-		if (!ToolRegistry.initialized) {
-			ToolRegistry.initialize();
-		}
-
-		const tools: ITool[] = [];
-		for (const name of names) {
-			const tool = ToolRegistry.toolNameMap.get(name);
-			if (tool) {
-				tools.push(tool);
-			}
-		}
-		return tools;
-	}
-
-	/**
-	 * Gets all registered tool names.
-	 * @returns {string[]} Array of all registered tool names
-	 */
-	static getRegisteredToolNames(): string[] {
-		if (!ToolRegistry.initialized) {
-			ToolRegistry.initialize();
-		}
-		return Array.from(ToolRegistry.toolNameMap.keys());
 	}
 }
 
@@ -512,90 +429,4 @@ function createUserToolSet(isSubAgent: boolean): ToolSet {
 		}
 	}
 	return toolSet;
-}
-
-/**
- * Creates a tool set for an agent based on its agentType configuration.
- * Resolves toolSets from AgentTypeRegistry and adds task_finish for non-root agents.
- *
- * @returns {ToolSet} Configured tool set
- * @throws {Error} If agentType is invalid
- */
-export interface CreateToolSetForAgentOptions {
-	agentType: string;
-	agentId?: string;
-	parentAgentId?: string | null;
-	enabledMcpTools?: McpToolSelection[];
-}
-
-/**
- * Builds the immutable tool set for a single agent run. MCP selections are a
- * persisted session snapshot; only tools that remain available in the registry
- * are added to this run.
- */
-export function createToolSetForAgent(options: CreateToolSetForAgentOptions): ToolSet;
-/** @deprecated Use the options overload. */
-export function createToolSetForAgent(agentType: string, uuid?: string, parentAgentId?: string | null): ToolSet;
-export function createToolSetForAgent(
-	optionsOrAgentType: CreateToolSetForAgentOptions | string,
-	legacyAgentId?: string,
-	legacyParentAgentId?: string | null,
-): ToolSet {
-	const options: CreateToolSetForAgentOptions = typeof optionsOrAgentType === "string"
-		? {
-			agentType: optionsOrAgentType,
-			agentId: legacyAgentId,
-			parentAgentId: legacyParentAgentId,
-		}
-		: optionsOrAgentType;
-	const { agentType, agentId, parentAgentId, enabledMcpTools = [] } = options;
-	const agentTypeConfig =
-		AgentTypeRegistry.getInstance().getAgentType(agentType);
-	if (!agentTypeConfig) {
-		throw new Error(
-			`Unknown agent type '${agentType}' for agent ${agentId || "unknown"}. ` +
-				`Available types: ${AgentTypeRegistry.getInstance().getAllTypes().join(", ")}`,
-		);
-	}
-
-	// Get combined tools from all specified tool sets
-	const tools = ToolSetRegistry.getInstance().getCombinedToolSet(
-		agentTypeConfig.toolSets,
-	);
-
-	// Create ToolSet with specific tools
-	const toolSet = new ToolSet({
-		includeCommon: false,
-		includeTaskFinish: false,
-		additionalTools: tools,
-	});
-
-	const mcpRegistry = McpRegistry.getInstance();
-	for (const selection of normalizeMcpToolSelections(enabledMcpTools)) {
-		for (const toolName of selection.toolNames) {
-			const tool = mcpRegistry.getTool(selection.serverId, toolName);
-			if (tool) {
-				toolSet.addTool(new McpToolAdapter(selection.serverId, tool, mcpRegistry));
-			}
-		}
-	}
-
-	// task_finish remains available only to sub-agents.
-	if (parentAgentId) {
-		const taskFinishTool = ToolRegistry.getTaskFinishTool();
-		toolSet.addTool(taskFinishTool);
-	}
-
-	return toolSet;
-}
-
-/**
- * Creates an empty tool set for special purposes (e.g., title generation).
- * @returns {ToolSet} Empty tool set
- */
-export function createEmptyToolSet(): ToolSet {
-	return new ToolSet({
-		includeCommon: false,
-		includeTaskFinish: false,
-	});
 }

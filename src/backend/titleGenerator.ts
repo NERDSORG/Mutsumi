@@ -13,7 +13,7 @@
 
 import { createUserMessage, extractText } from '@moonshot-ai/kosong';
 import type { AgentMessage } from '../types';
-import { createEmptyToolSet } from '../tools.d/toolManager';
+import { createEmptyToolSet } from '../tools.d/agentToolSet';
 import { RenderDataBuilder } from '../agent/renderDataBuilder';
 import { getModelCredentials, getTitleModelSelection, sanitizeFileName } from '../utils';
 import { debugLogger } from '../debugLogger';
