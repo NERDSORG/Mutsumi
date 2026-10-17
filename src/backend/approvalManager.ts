@@ -9,11 +9,12 @@
  *
  * Rejection reasons arrive with the respond payload.
  *
- * Besides the BtF events, this module additionally exposes the
- * `onDidChangeRequests` VSCode event for the in-process sidebar approval
- * tree (the always-on fallback frontend) to subscribe to directly. This is
- * a deliberate exception to the event-bus-only rule; cross-process
- * frontends still go through the EventBus exclusively.
+ * Any change to the request list (a request is suspended, settled, an
+ * auto-approved trace is recorded, or an expired trace is removed) is
+ * broadcast as the bare `approval.changed` notification; the in-process
+ * sidebar approval tree subscribes to it and reads the records back via
+ * `getAllRequests()` (the same pattern as `sessions.changed` for the agent
+ * tree).
  *
  * @module backend/approvalManager
  */
@@ -55,9 +56,6 @@ interface PendingEntry {
  */
 export class ApprovalRequestManager {
     private readonly requests = new Map<string, PendingEntry>();
-    private readonly _onDidChangeRequests = new vscode.EventEmitter<void>();
-    /** Fires whenever the request list changes; the sidebar approval tree subscribes. */
-    readonly onDidChangeRequests = this._onDidChangeRequests.event;
 
     constructor(private readonly bus: EventBus) {}
 
@@ -122,7 +120,7 @@ export class ApprovalRequestManager {
             onApprove: init.onApprove,
         };
         this.requests.set(id, entry);
-        this._onDidChangeRequests.fire();
+        this.bus.emitBtF('approval.changed', {});
         this.bus.emitBtF('approval.requested', { sessionId: init.sessionId, request: { ...info } });
 
         if (init.abortSignal) {
@@ -180,12 +178,12 @@ export class ApprovalRequestManager {
         }
 
         this.bus.emitBtF('approval.resolved', { sessionId, requestId, outcome, reason, origin });
-        this._onDidChangeRequests.fire();
+        this.bus.emitBtF('approval.changed', {});
         // Keep the resolved record briefly so the sidebar can show the outcome.
         setTimeout(() => {
             if (this.requests.get(requestId) === entry) {
                 this.requests.delete(requestId);
-                this._onDidChangeRequests.fire();
+                this.bus.emitBtF('approval.changed', {});
             }
         }, 1000);
     }
@@ -204,7 +202,7 @@ export class ApprovalRequestManager {
             outcome: 'reject',
         });
         this.requests.delete(requestId);
-        this._onDidChangeRequests.fire();
+        this.bus.emitBtF('approval.changed', {});
     }
 
     /** Cancel every pending request belonging to a session (run interrupted). */
@@ -251,10 +249,10 @@ export class ApprovalRequestManager {
             resolve: () => {},
             reject: () => {},
         });
-        this._onDidChangeRequests.fire();
+        this.bus.emitBtF('approval.changed', {});
         setTimeout(() => {
             this.requests.delete(id);
-            this._onDidChangeRequests.fire();
+            this.bus.emitBtF('approval.changed', {});
         }, 1000);
     }
 }

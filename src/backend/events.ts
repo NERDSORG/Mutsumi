@@ -176,6 +176,12 @@ export interface BtFEventMap {
     'context.debugResult': { sessionId: string; formatted: string };
     /** Global event: the session tree/list changed; sidebars refresh. */
     'sessions.changed': Record<string, never>;
+    /**
+     * Global event: the approval request list changed (a request was
+     * suspended, settled, auto-approved trace recorded, or an expired trace
+     * removed); the approval sidebar refreshes.
+     */
+    'approval.changed': Record<string, never>;
     /** Global event: auto-approve switch replay. */
     'settings.autoApprove': { enabled: boolean };
 }
@@ -218,6 +224,7 @@ export const BTF_EVENT_NAMES = [
     'session.error',
     'approval.requested',
     'approval.resolved',
+    'approval.changed',
     'context.debugResult',
     'sessions.changed',
     'settings.autoApprove',

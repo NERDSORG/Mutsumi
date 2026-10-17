@@ -12,10 +12,9 @@ export type ApprovalSidebarItem = ApprovalTreeItem;
  * frontend for approvals. Shows tool approval requests (from the backend
  * ApprovalRequestManager).
  *
- * As the in-process fallback frontend, this component directly subscribes to
- * `backend.approvals.onDidChangeRequests` and reads `getAllRequests()` — an
- * exception explicitly sanctioned by the architecture contract (see the
- * `backend/approvalManager` module docstring).
+ * Refreshes on the `approval.changed` BtF event and reads the records back
+ * via `getAllRequests()` — the same pattern as the agent tree refreshing on
+ * `sessions.changed` and reading the registry directly.
  * @class ApprovalTreeDataProvider
  * @implements {vscode.TreeDataProvider<ApprovalSidebarItem>}
  */
@@ -27,7 +26,7 @@ export class ApprovalTreeDataProvider implements vscode.TreeDataProvider<Approva
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     constructor(private readonly backend: AgentBackend) {
-        this.backend.approvals.onDidChangeRequests(() => this.refresh());
+        this.backend.bus.onBtF('approval.changed', () => this.refresh());
     }
 
     getTreeItem(element: ApprovalSidebarItem): vscode.TreeItem {
