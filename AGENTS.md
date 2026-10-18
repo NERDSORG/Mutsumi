@@ -12,6 +12,7 @@ Mutsumi 是一个 VS Code 多 Agent 对话环境：Agent 会话以 `.mtm` 文件
 - **后端 ↔ 前端适配器**：唯一通道是 `EventBus` 的类型化事件协议。前端到后端只有 FtB（意图），后端到前端只有 BtF（事实）；前端永不监听 FtB；任何改变后端状态的 FtB 必须广播对应 BtF。除 `sessions.changed`、`settings.autoApprove` 外，事件都携带 `sessionId` 路由。
 - **事件协议自含于 `src/backend/events.ts`**：payload 映射与事件名数组互相 `satisfies` 校验，`registerBackendHandlers` 的 mapped type 强制穷尽——新增事件漏登任何一处，编译直接报错。
 - **适配器 ↔ 前端 UI**：协议由各适配器自定，不进总线（WebView 用 adapter-local RPC 信封；将来可能有 ACP）。
+- **纯前端↔适配器事务在适配器处终结**：不触碰后端状态、不需要后端知情的请求（如 `@` 补全的搜索 RPC、图片上传解析），用适配器本地机制实现，不要为它新增总线事件；把后端拉进纯前端-适配器事务是制造耦合。
 - **会话的真相**：`.mtm` 文件，`sessionStore` 是唯一写口；运行中以内存为准，外部改文件不触发重载。
 
 ## 目录与文件约定
