@@ -21,9 +21,20 @@ import type { ApprovalRequestInfo } from './events';
 export type SessionStatus = 'idle' | 'running';
 export type SessionStopReason = 'completed' | 'interrupted' | 'error';
 
-/** A user message waiting in the session's run queue. */
-export interface QueuedUserMessage {
-    text: string;
+/**
+ * One inbound stimulus for a session: `text` is the source markdown (raw input
+ * for `user`/`agent`, injection markdown for `injection`). `kind` decides the
+ * committed message's `messageType` tag and its UI card type only.
+ */
+export type InboundItem = { kind: 'user' | 'injection' | 'agent'; text: string };
+
+/** An inbound item waiting in the session's run queue. */
+export interface QueuedInbound {
+    item: InboundItem;
+    /**
+     * When the item drains. `queue`: batched into a turn after the run ends.
+     * `steer`: at the next round boundary, else with that same batch.
+     */
     mode: 'queue' | 'steer';
 }
 
@@ -81,25 +92,22 @@ export interface ApprovalRequestInit {
     /** Filled by `BackendSession` from `context.toolSession.toolName`. */
     toolName: string;
     /**
-     * Request label shared by all approval frontends. Filled by
-     * `BackendSession` from the tool's prettyPrint (`context.callDescription`);
-     * may carry a leading `$(icon)` token.
+     * Request label shared by all approval frontends; filled by
+     * `BackendSession` from `context.callDescription` (may carry `$(icon)`).
      */
     actionDescription: string;
     targetUri: string;
     details?: string;
     /**
-     * Optional local action offered on the approval card (e.g. "view/edit
-     * diff"). `localOnly` actions are not advertised to remote (ACP) clients.
-     * The handler runs in the extension host and does NOT settle the request.
+     * Optional local action on the approval card (e.g. "view/edit diff");
+     * `localOnly` actions are not advertised to remote (ACP) clients. The
+     * handler runs in the extension host and does not settle the request.
      */
     customAction?: { label: string; localOnly?: boolean; handler: () => Promise<void> };
     /** Aborts the pending request (resolves as cancelled) when fired. */
     abortSignal?: AbortSignal;
     /**
-     * Runs on approval before the request resolves; the returned value becomes
-     * the resolution payload (used by the edit transaction to surface the
-     * "accepted with manual edits" diff).
+     * Runs on approval; the returned value becomes the resolution payload.
      */
     onApprove?: () => Promise<unknown>;
 }
@@ -125,4 +133,6 @@ export interface DispatchRequestItem {
     prompt: string;
     allowed_uris: string[];
     agent_type?: string;
+    /** Becomes the child session's title and locks title generation */
+    name?: string;
 }

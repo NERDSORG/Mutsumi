@@ -9,9 +9,9 @@
 
 /**
  * A single renderable unit of agent output.
- * @description Discriminated union over the three kinds of output the agent
- * produces: markdown content, collapsible reasoning, and tool calls.
- * Blocks in {@link RenderData.committed} are locked and never re-rendered.
+ * @description Discriminated union over the kinds of output a session
+ * produces: markdown content, collapsible reasoning and tool calls. Blocks in
+ * {@link RenderData.committed} are locked and never re-rendered.
  */
 export type RenderBlock =
     | { type: 'content'; markdown: string }

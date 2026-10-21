@@ -1,12 +1,7 @@
 /**
- * @fileoverview Title generation for agent sessions.
- *
- * Triggered by the drain loop after the run answering the session's first
- * user message. Runs a single-round, tool-less AgentRunner against an
- * ephemeral BackendSession (fileUri = null — it emits events like any other
- * session, but nobody subscribes and nothing is persisted), then routes the
- * result through the normal rename path (metadata → file rename →
- * broadcasts).
+ * @fileoverview Title generation for agent sessions: runs a single-round,
+ * tool-less AgentRunner against an ephemeral BackendSession, then routes the
+ * result through the normal rename path.
  *
  * @module backend/titleGenerator
  */
@@ -15,6 +10,7 @@ import { createUserMessage, extractText } from '@moonshot-ai/kosong';
 import type { AgentMessage } from '../types';
 import { createEmptyToolSet } from '../tools.d/agentToolSet';
 import { RenderDataBuilder } from '../agent/renderDataBuilder';
+import { getMessageType } from '../contextManagement/messageTypes';
 import { getModelCredentials, getTitleModelSelection, sanitizeFileName } from '../utils';
 import { debugLogger } from '../debugLogger';
 import { BackendSession } from './backendSession';
@@ -22,8 +18,10 @@ import type { BackendSessionDeps } from './interfaces';
 
 /** Build the title-generation system prompt and user message. */
 function createTitlePrompt(messages: AgentMessage[]): { systemPrompt: string; userText: string } {
-    // Split into rounds and take the last 6
-    const dialogMessages = messages.filter(msg => msg.role !== 'system');
+    // Last 6 rounds; context injections excluded, agent messages kept.
+    const dialogMessages = messages.filter(
+        msg => msg.role !== 'system' && !(msg.role === 'user' && getMessageType(msg) === 'injection'),
+    );
     const rounds: AgentMessage[][] = [];
     let currentRound: AgentMessage[] = [];
     for (const msg of dialogMessages) {
@@ -53,17 +51,19 @@ function createTitlePrompt(messages: AgentMessage[]): { systemPrompt: string; us
     };
 }
 
-/**
- * Generates conversation titles via a one-shot ephemeral session.
- */
+/** Generates conversation titles through a one-shot ephemeral session. */
 export class TitleGenerator {
     constructor(private readonly deps: BackendSessionDeps) {}
 
-    /**
-     * Generate and apply a title for the given session. Best-effort: any
-     * failure is logged and swallowed.
-     */
+    /** Generate and apply a title for the given session; best-effort. */
     async generateForSession(session: BackendSession): Promise<void> {
+        if (session.metadata.title_locked) {
+            // A locked title never regenerates; rename still syncs a leftover
+            // uuid file name to the existing title.
+            await session.rename(session.metadata.name);
+            debugLogger.log('[TitleGenerator] Skipped: title locked');
+            return;
+        }
         // Title model priority: settings titleGeneratorModel > session metadata pair
         let selection = getTitleModelSelection();
         if (!selection && session.metadata.model && session.metadata.provider) {

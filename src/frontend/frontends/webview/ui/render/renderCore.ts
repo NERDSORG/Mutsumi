@@ -2,7 +2,8 @@
  * @fileoverview Render core for the Mutsumi chat webview: micromark (GFM)
  * markdown, lowlight syntax highlighting, committed-block DOM caching,
  * fingerprint-prefixed incremental active reconciliation, <pre> salvaging,
- * and details open-state inheritance.
+ * details open-state inheritance, and the standalone {@link buildDetailsCard}
+ * used for inbound message cards.
  *
  * Packaged as a per-turn {@link TurnRenderer} class (one instance per agent
  * turn).
@@ -183,6 +184,53 @@ function prepareCodeBlocks(
  */
 function appendSummaryChevron(summary: HTMLElement): void {
   summary.appendChild(codicon('chevron-right', 'mutsumi-summary-chevron'));
+}
+
+/** A collapsible markdown card, built from a summary label and a body. */
+export interface DetailsCardOptions {
+  /** Codicon name for the summary gutter icon. */
+  icon: string;
+  /** Already-localized summary text. */
+  summaryText: string;
+  /** Markdown body. */
+  markdown: string;
+  /** Create the card expanded instead of collapsed. */
+  defaultOpen?: boolean;
+  /** Class name for the body element. */
+  contentClassName?: string;
+}
+
+/**
+ * Build a standalone collapsible card: a `div.mutsumi-block` holding one
+ * `<details>` row (gutter icon, summary text, disclosure chevron) and a
+ * markdown body. The block shell is the same one agent output blocks use, so
+ * every details style, chevron and expand/collapse animation applies as-is.
+ * Body code blocks are highlighted and decorated like committed blocks, so this
+ * builder is for standalone cards only; {@link renderBlock} output must stay
+ * unhighlighted for the incremental fingerprints.
+ */
+export function buildDetailsCard(options: DetailsCardOptions): HTMLElement {
+  const div = document.createElement('div');
+  div.className = 'mutsumi-block';
+
+  const details = document.createElement('details');
+  if (options.defaultOpen) details.setAttribute('open', '');
+  const summary = document.createElement('summary');
+  summary.appendChild(codicon(options.icon, 'mutsumi-label-icon'));
+  summary.appendChild(document.createTextNode(options.summaryText));
+  appendSummaryChevron(summary);
+  details.appendChild(summary);
+
+  const content = document.createElement('div');
+  if (options.contentClassName) {
+    content.className = options.contentClassName;
+  }
+  content.innerHTML = renderMarkdown(options.markdown);
+  details.appendChild(content);
+  div.appendChild(details);
+
+  prepareCodeBlocks(div);
+  return div;
 }
 
 /** Build an unhighlighted RenderBlock DOM element. */

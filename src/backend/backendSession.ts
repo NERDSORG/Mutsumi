@@ -1,22 +1,17 @@
 /**
- * @fileoverview BackendSession — the single session implementation.
- *
- * Owns the session's full truth — metadata, flat message history,
- * per-session run queue, current render IR and abort handle — and is the
- * single write point for both history (`appendMessage`) and persistence
- * (`persist`, via SessionStore's per-file write queue). Frontends observe it
- * exclusively through BtF events.
- *
- * `fileUri === null` marks an ephemeral session (title generation, Lite
- * one-shot runs): it emits events like any other session but never touches
- * the disk or the registry.
+ * @fileoverview BackendSession — the single session implementation. Owns the
+ * session's full truth (metadata, flat message history, inbound queue,
+ * current render IR, abort handle) and is the single write point for history
+ * (`commitMessage`) and persistence (`persist`). Frontends observe it through
+ * BtF events only. `fileUri === null` marks an ephemeral session: it emits
+ * events but never touches the disk or the registry.
  *
  * @module backend/backendSession
  */
 
 import * as vscode from 'vscode';
 import { v4 as uuidv4 } from 'uuid';
-import { createToolMessage } from '@moonshot-ai/kosong';
+import { createToolMessage, extractText } from '@moonshot-ai/kosong';
 import type { AgentMessage, AgentMetadata } from '../types';
 import type { McpToolSelection } from '../tools.d/mcp/interfaces';
 import type { RenderData } from '../shared/renderTypes';
@@ -28,10 +23,13 @@ import type { AgentRunOptions } from '../agent/interfaces';
 import { normalizeReasoningEffort } from '../agent/types';
 import {
     assembleSystemPrompt,
-    assembleUserMessage,
+    assembleUserInput,
     assembleWireHistory,
 } from '../contextManagement/history';
-import { decodeGhostBlock, isEmptyGhostBlock, removeGhostFiles } from '../contextManagement/ghostBlocks';
+import {
+    createInjectionMessage,
+    getMessageType,
+} from '../contextManagement/messageTypes';
 import { collectRulesRecursively } from '../contextManagement/prompts';
 import { getDefaultModelSelection, getModelCredentials, resolveModelSelection } from '../utils';
 import { debugLogger } from '../debugLogger';
@@ -45,7 +43,8 @@ import type {
     BackendSessionDeps,
     BackendSessionOptions,
     DispatchRequestItem,
-    QueuedUserMessage,
+    InboundItem,
+    QueuedInbound,
     SessionStatus,
     SessionStopReason,
 } from './interfaces';
@@ -71,14 +70,18 @@ export class BackendSession {
     currentAbort: AbortController | undefined;
 
     /**
-     * Termination signaling hook of the in-flight tool batch. Set by
-     * ToolExecutor while executing tools; invoked when an approval rejection
-     * without reason must terminate the session.
+     * Termination signaling hook of the in-flight tool batch, set by
+     * ToolExecutor while executing tools.
      */
     terminationHook: ((isTaskComplete: boolean) => void) | null = null;
 
-    private queue: QueuedUserMessage[] = [];
+    private queue: QueuedInbound[] = [];
     private drainPromise: Promise<void> | null = null;
+    /**
+     * Epoch of the drain loop. `truncateFrom` bumps it so the in-flight loop
+     * exits instead of consuming the queue.
+     */
+    private drainEpoch = 0;
     private readonly maxLoops: number;
     private readonly emptyToolSet: boolean;
 
@@ -155,12 +158,14 @@ export class BackendSession {
     // ------------------------------------------------------------------
 
     /**
-     * The single history write point. Every produced message is appended the
-     * moment it exists and triggers a queued persist.
+     * The single history write point: appends the message and queues a
+     * persist.
+     * @returns The index of the appended message in the flat history
      */
-    appendMessage(msg: AgentMessage): void {
+    commitMessage(msg: AgentMessage): number {
         this.history.push(msg);
         void this.persist();
+        return this.history.length - 1;
     }
 
     /** Persist through the store's per-file write queue. No-op for ephemeral sessions. */
@@ -174,22 +179,32 @@ export class BackendSession {
     }
 
     /**
-     * Assemble, append, broadcast and persist a user message. Returns the
-     * persisted message (callers projecting onto the wire use
-     * `projectUserMessageToWire`).
+     * Commit one inbound item: every kind assembles through the template
+     * pipeline, then commits a `role: 'user'` message carrying the assembled
+     * text and `metadata.messageType` set to the item's kind (`user` stays
+     * untagged), followed by the derived injection message when the assembly
+     * produced one. Turn events fire in `drainInbound`.
+     * @returns The committed messages in commit order
      */
-    async commitUserMessage(text: string): Promise<AgentMessage> {
-        const msg = await assembleUserMessage(this, text);
-        this.appendMessage(msg);
-        this.deps.bus.emitBtF('session.userMessageCommitted', {
-            sessionId: this.sessionId,
-            text,
-            historyIndex: this.history.length - 1,
-        });
+    private async commitInbound(item: InboundItem): Promise<AgentMessage[]> {
+        const { text, injectionMarkdown } = await assembleUserInput(this, item.text);
+        const message: AgentMessage = {
+            role: 'user',
+            content: [{ type: 'text', text }],
+            toolCalls: [],
+        };
+        if (item.kind !== 'user') {
+            message.metadata = { messageType: item.kind };
+        }
+        this.commitMessage(message);
         await this.persist();
-        // Assembly updated metadata.contextItems (file versions/macros).
         this.broadcastMetadata();
-        return msg;
+        if (injectionMarkdown === null) {
+            return [message];
+        }
+        const injectionMessage = createInjectionMessage(injectionMarkdown);
+        this.commitMessage(injectionMessage);
+        return [message, injectionMessage];
     }
 
     // ------------------------------------------------------------------
@@ -198,66 +213,134 @@ export class BackendSession {
 
     /** Enqueue a user message; starts the drain loop when idle. */
     enqueueUserMessage(text: string, mode: 'queue' | 'steer' = 'queue'): void {
-        this.queue.push({ text, mode });
+        this.enqueue({ kind: 'user', text }, mode);
+    }
+
+    /**
+     * Enqueue a context-injection message from its markdown source; entry
+     * point for injection producers. Starts the drain loop when idle.
+     */
+    enqueueInjection(text: string, mode: 'queue' | 'steer' = 'queue'): void {
+        this.enqueue({ kind: 'injection', text }, mode);
+    }
+
+    /**
+     * Enqueue an agent-to-agent message; commits as an agent message (own UI
+     * block, no user-bubble event). Starts the drain loop when idle.
+     */
+    enqueueAgentMessage(text: string, mode: 'queue' | 'steer' = 'queue'): void {
+        this.enqueue({ kind: 'agent', text }, mode);
+    }
+
+    private enqueue(item: InboundItem, mode: 'queue' | 'steer'): void {
+        this.queue.push({ item, mode });
         this.emitStatus();
         if (!this.drainPromise) {
-            this.drainPromise = this.drainLoop().finally(() => {
-                this.drainPromise = null;
-            });
+            this.startDrain();
         }
     }
 
     /**
-     * Extract all pending steer messages (queue messages stay queued).
-     * Only called by the runner at round boundaries.
+     * The single inbound drain, hung at two points: round boundary (`due` =
+     * steered only, by the runner) and turn startup (`due` = all, by
+     * `executeTurn`). Rescans the queue per item and yields in commit order,
+     * the caller completing each item's wire work before the next pull. Every
+     * committed message opens a new row: `session.turnStarted` followed by
+     * `session.inboundCommitted`.
      */
-    drainSteering(): string[] {
-        if (this.queue.length === 0) {
-            return [];
-        }
-        const steered: string[] = [];
-        const remaining: QueuedUserMessage[] = [];
-        for (const msg of this.queue) {
-            if (msg.mode === 'steer') {
-                steered.push(msg.text);
-            } else {
-                remaining.push(msg);
+    async *drainInbound(due: (queued: QueuedInbound) => boolean): AsyncGenerator<AgentMessage> {
+        for (;;) {
+            const index = this.queue.findIndex(due);
+            if (index === -1) {
+                return;
+            }
+            const queued = this.queue.splice(index, 1)[0];
+            this.emitStatus();
+            // This item's commits are contiguous; the first lands at `base`.
+            const base = this.history.length;
+            const committed = await this.commitInbound(queued.item);
+            for (let offset = 0; offset < committed.length; offset++) {
+                const msg = committed[offset];
+                const historyIndex = base + offset;
+                const messageType = getMessageType(msg);
+                this.deps.bus.emitBtF('session.turnStarted', {
+                    sessionId: this.sessionId,
+                    historyIndex,
+                });
+                // Raw user input is the card text; every other message projects its content.
+                const text = messageType === 'user' ? queued.item.text : extractText(msg);
+                this.deps.bus.emitBtF('session.inboundCommitted', {
+                    sessionId: this.sessionId,
+                    messageType,
+                    text,
+                    historyIndex,
+                });
+                yield msg;
             }
         }
-        if (steered.length > 0) {
-            this.queue = remaining;
-            this.emitStatus();
-        }
-        return steered;
     }
 
+    /**
+     * Apply one committed inbound message to the current turn's render IR and
+     * publish it: every message opens its own row, so the builder seals the
+     * previous row and starts a fresh one.
+     */
+    applyCommittedToTurn(): void {
+        const builder = this.renderDataBuilder ?? (this.renderDataBuilder = new RenderDataBuilder());
+        builder.commitTurnBoundary();
+        this.publishRenderData(builder.getRenderData());
+    }
+
+    /**
+     * Run turns serially while the epoch is current and the queue is
+     * non-empty; each iteration batch-consumes every currently due item into
+     * one turn. `truncateFrom` supersedes the epoch, so the retiring loop
+     * exits without consuming the queue.
+     */
     private async drainLoop(): Promise<void> {
-        while (this.queue.length > 0) {
-            const msg = this.queue.shift()!;
-            this.emitStatus();
-            await this.executeTurn(msg.text);
+        const epoch = this.drainEpoch;
+        while (epoch === this.drainEpoch && this.queue.length > 0) {
+            await this.executeTurn();
         }
     }
 
-    private async executeTurn(text: string): Promise<void> {
+    /** Start the drain loop; the handle clears itself when the loop settles. */
+    private startDrain(): void {
+        this.drainPromise = this.drainLoop().finally(() => {
+            this.drainPromise = null;
+        });
+    }
+
+    private async executeTurn(): Promise<void> {
         this.setRunning(true);
         const abortController = new AbortController();
         this.currentAbort = abortController;
         let reason: SessionStopReason = 'completed';
         let firstTurn = false;
         try {
-            await this.commitUserMessage(text);
-            firstTurn = this.history.filter(m => m.role === 'user').length === 1;
+            const preDrainHadUserMessage = this.history.some(
+                m => m.role === 'user' && getMessageType(m) === 'user',
+            );
             this.renderDataBuilder = new RenderDataBuilder();
             this.currentTurnRenderData = null;
+            let batchContainedUserMessage = false;
+            // Batch-drain every due item into this turn; each message is
+            // applied to the render IR as it commits.
+            for await (const msg of this.drainInbound(() => true)) {
+                this.applyCommittedToTurn();
+                if (msg.role === 'user' && getMessageType(msg) === 'user') {
+                    batchContainedUserMessage = true;
+                }
+            }
+            firstTurn = !preDrainHadUserMessage && batchContainedUserMessage;
 
             const systemPrompt = await assembleSystemPrompt(this.metadata);
             const wireHistory = await assembleWireHistory(this);
             const toolSet = this.buildToolSet();
             const options = this.resolveRunOptions();
 
-            // Dynamic import: agentRunner imports this module's type; keeping
-            // the value edge lazy avoids a module cycle.
+            // Dynamic import: agentRunner only imports this module's type, so
+            // the value edge stays lazy (no module cycle).
             const { AgentRunner } = await import('../agent/agentRunner');
             const runner = new AgentRunner(options, toolSet, this);
             await runner.run(abortController, { systemPrompt, wireHistory });
@@ -286,8 +369,7 @@ export class BackendSession {
 
     /**
      * Hard-stop the current run, clear the queue, repair and persist.
-     * Interrupt cascades to every materialized descendant session (an
-     * interrupt is an emergency brake for the whole agent tree).
+     * Cascades to every materialized descendant session.
      */
     async interrupt(): Promise<void> {
         await this.interruptTree(new Set());
@@ -302,8 +384,7 @@ export class BackendSession {
         this.queue = [];
         this.deps.approvals.cancelSessionRequests(this.sessionId);
 
-        // Cascade to materialized descendants (cold descendants have no run
-        // to stop; recursion covers deeper levels).
+        // Cascade to materialized descendants (cold ones have no run to stop).
         const entry = this.deps.registry.get(this.sessionId);
         const childInterrupts: Promise<void>[] = [];
         for (const childId of entry?.childIds ?? []) {
@@ -315,8 +396,7 @@ export class BackendSession {
 
         if (this.currentAbort) {
             this.currentAbort.abort();
-            // Wait for the in-flight turn to settle (its finally-block repairs
-            // the tail, persists and broadcasts the idle/interrupted status).
+            // Wait for the in-flight turn to settle in its finally block.
             await Promise.all([this.drainPromise, ...childInterrupts]);
             return;
         }
@@ -325,18 +405,30 @@ export class BackendSession {
     }
 
     /**
-     * Cascade-delete the history from `fromIndex` onwards: interrupt first
-     * when running, then truncate, repair the tail, clear the queue and
-     * persist. Callers broadcast a fresh `session.state` snapshot afterwards.
+     * Cascade-delete the history from `fromIndex` onwards: bump the drain
+     * epoch and drop the queued items (the in-flight loop retires at its next
+     * iteration boundary), interrupt when running, slice, repair the tail,
+     * emit `session.historyTruncated` synchronously (before the persist await)
+     * and restart the drain for items queued meanwhile. Frontends drop rows
+     * ≥ `fromIndex`.
      */
     async truncateFrom(fromIndex: number): Promise<void> {
+        this.drainEpoch++;
+        this.queue = [];
         if (this.currentAbort || this.drainPromise) {
             await this.interrupt();
         }
-        this.queue = [];
-        this.history = this.history.slice(0, Math.max(0, fromIndex));
+        const cut = Math.max(0, fromIndex);
+        this.history = this.history.slice(0, cut);
         this.repairDanglingToolCalls();
         this.currentTurnRenderData = null;
+        this.deps.bus.emitBtF('session.historyTruncated', {
+            sessionId: this.sessionId,
+            fromIndex: cut,
+        });
+        if (this.queue.length > 0 && !this.drainPromise) {
+            this.startDrain();
+        }
         await this.persist();
     }
 
@@ -350,9 +442,9 @@ export class BackendSession {
     }
 
     /**
-     * Scan the history tail: any assistant toolCall without a following tool
-     * message gets a synthetic `[Interrupted]` placeholder so the wire
-     * protocol history stays legal after interrupts/truncations.
+     * Repair the history tail: every assistant toolCall without a matching
+     * tool message gets a synthetic `[Interrupted]` placeholder, keeping the
+     * wire history legal after interrupts/truncations.
      */
     private repairDanglingToolCalls(): void {
         const repaired: AgentMessage[] = [];
@@ -403,6 +495,7 @@ export class BackendSession {
             return;
         }
         this.metadata.name = trimmed;
+        this.metadata.title_locked = true;
         if (this.fileUri) {
             const newUri = await this.deps.registry.renameAgentFile(this.sessionId, trimmed);
             if (newUri) {
@@ -474,31 +567,12 @@ export class BackendSession {
     }
 
     /**
-     * Stop tracking a referenced file: drop its version/hash tracking from
-     * metadata.contextItems (a future re-reference re-injects it fully) and
-     * strip its ghost entries from every user message so it no longer appears
-     * anywhere in the assembled context.
+     * Stop tracking a referenced file: drop its version/hash entry from
+     * `metadata.contextItems`. History is never touched.
      */
     async removeContextFile(key: string): Promise<void> {
         const items = this.metadata.contextItems ?? [];
         this.metadata.contextItems = items.filter(i => !(i.type === 'file' && i.key === key));
-        for (const msg of this.history) {
-            if (msg.role !== 'user' || msg.metadata?.last_ghost_block === undefined) {
-                continue;
-            }
-            const block = decodeGhostBlock(msg.metadata.last_ghost_block);
-            if (!block || !block.files.some(f => f.key === key)) {
-                continue;
-            }
-            const stripped = removeGhostFiles(block, f => f.key === key);
-            const newMetadata = { ...msg.metadata };
-            if (stripped === null || isEmptyGhostBlock(stripped)) {
-                delete newMetadata.last_ghost_block;
-            } else {
-                newMetadata.last_ghost_block = stripped;
-            }
-            msg.metadata = newMetadata;
-        }
         await this.persist();
         this.broadcastMetadata();
     }
@@ -525,8 +599,7 @@ export class BackendSession {
 
     /**
      * task_finish entry point: mark finished and report to the parent session
-     * (a steered agent message). May be called multiple times — the user can
-     * talk to a finished sub-agent and have it report again.
+     * as a steered agent message. Callable repeatedly.
      */
     async reportTaskFinished(summary: string): Promise<void> {
         await this.markTaskFinished();
@@ -539,11 +612,9 @@ export class BackendSession {
     }
 
     /**
-     * Deliver an agent message to another session. The message lands as a
-     * steered user message: injected at the next round boundary while the
-     * target is running, or wakes the target (a new turn) when it is stopped
-     * — regardless of how it stopped. Returns a status string for the
-     * calling tool.
+     * Deliver a steered agent message to another session: injected at the next
+     * round boundary while the target runs, otherwise wakes it with a new turn.
+     * Returns the status string for the calling tool.
      */
     async deliverAgentMessage(targetUuid: string, text: string): Promise<string> {
         const targetEntry = this.deps.registry.get(targetUuid);
@@ -552,7 +623,7 @@ export class BackendSession {
         }
         const target = await this.deps.materializeSession(targetUuid);
         const wasRunning = target.status === 'running';
-        target.enqueueUserMessage(text, 'steer');
+        target.enqueueAgentMessage(text, 'steer');
         return wasRunning
             ? `Message delivered to agent '${targetEntry.name}'; it will see it at the next round boundary.`
             : `Message delivered to agent '${targetEntry.name}'; it will wake up and process it.`;
@@ -561,59 +632,6 @@ export class BackendSession {
     // ------------------------------------------------------------------
     // Context operations
     // ------------------------------------------------------------------
-
-    /**
-     * Prune ghost-block file entries whose version is older than the latest
-     * known version of that key (max of tracked metadata versions and versions
-     * present in ghost blocks). Returns whether anything changed.
-     */
-    async pruneGhostBlocks(): Promise<boolean> {
-        const latestVersions = new Map<string, number>();
-        for (const item of this.metadata.contextItems ?? []) {
-            if (item.type === 'file') {
-                latestVersions.set(item.key, item.version || 1);
-            }
-        }
-        for (const msg of this.history) {
-            if (msg.role !== 'user') {
-                continue;
-            }
-            const block = decodeGhostBlock(msg.metadata?.last_ghost_block);
-            if (!block) {
-                continue;
-            }
-            for (const file of block.files) {
-                latestVersions.set(file.key, Math.max(latestVersions.get(file.key) ?? 0, file.version));
-            }
-        }
-
-        let changed = false;
-        for (const msg of this.history) {
-            if (msg.role !== 'user' || msg.metadata?.last_ghost_block === undefined) {
-                continue;
-            }
-            const block = decodeGhostBlock(msg.metadata.last_ghost_block);
-            const isStale = (file: { key: string; version: number }) =>
-                file.version < (latestVersions.get(file.key) ?? file.version);
-            if (!block || !block.files.some(isStale)) {
-                continue;
-            }
-            const stripped = removeGhostFiles(block, isStale);
-            const newMetadata = { ...msg.metadata };
-            if (stripped === null || isEmptyGhostBlock(stripped)) {
-                delete newMetadata.last_ghost_block;
-            } else {
-                newMetadata.last_ghost_block = stripped;
-            }
-            msg.metadata = newMetadata;
-            changed = true;
-        }
-
-        if (changed) {
-            await this.persist();
-        }
-        return changed;
-    }
 
     /** Assemble the complete LLM context (system + wire history) for debugging. */
     async debugContext(): Promise<string> {
@@ -626,7 +644,7 @@ export class BackendSession {
         return formatMessagesToString(messages, { includeHeader: true });
     }
 
-    /** Broadcast a fresh `session.state` snapshot (after truncate/prune, or on open). */
+    /** Broadcast a fresh `session.state` snapshot (hydration on open). */
     async broadcastSnapshot(): Promise<void> {
         const snapshot = await buildSessionSnapshot(this, this.deps.approvals);
         this.deps.bus.emitBtF('session.state', snapshot);
@@ -639,8 +657,7 @@ export class BackendSession {
     /**
      * Simple-tool approval path: resolves to null when approved, otherwise to
      * the `[Rejected]`/`[Cancelled]` message the tool returns to the model.
-     * The request label is the tool's own prettyPrint, taken from
-     * `context.callDescription`.
+     * The label is the tool's prettyPrint (`context.callDescription`).
      */
     async requestApproval(
         context: ToolContext,
@@ -656,10 +673,9 @@ export class BackendSession {
     }
 
     /**
-     * Full approval path (edit transactions): supports custom actions and an
-     * onApprove callback whose return value becomes the resolution payload.
-     * Returns the request id (null for auto-approved) so callers can cancel a
-     * pending request.
+     * Full approval path (edit transactions): custom actions plus an
+     * `onApprove` callback whose return value becomes the resolution payload.
+     * Returns the request id (null when auto-approved) so callers can cancel it.
      */
     requestApprovalWithAction(
         context: ToolContext,
@@ -681,8 +697,8 @@ export class BackendSession {
     }
 
     /**
-     * Map an approval resolution to the tool-facing result string. Empty
-     * rejection reasons terminate the session.
+     * Map an approval resolution to the tool-facing result string. An empty
+     * rejection reason terminates the session.
      */
     formatApprovalResolution(toolName: string, resolution: ApprovalResolution): string | null {
         switch (resolution.kind) {
@@ -702,17 +718,15 @@ export class BackendSession {
     }
 
     /**
-     * dispatch_subagents entry point (parent side; called after approval).
-     * Creates and immediately starts every child in the background, then
-     * resolves right away with the children manifest — children report back
-     * via task_finish, which lands as steered agent messages.
+     * dispatch_subagents entry point: creates and starts every child in the
+     * background, then resolves with the children manifest. Children report
+     * back through `task_finish` as steered agent messages.
      */
     async requestDispatch(
         contextBroadcast: string,
         subAgents: DispatchRequestItem[],
     ): Promise<string> {
-        // Pre-generate uuids so every child's prompt carries the full identity
-        // block (own id, parent id, sibling ids).
+        // Pre-generate uuids so each child's prompt carries the identity block.
         const planned = subAgents.map(sub => ({
             sub,
             uuid: uuidv4(),
@@ -739,6 +753,7 @@ export class BackendSession {
                 allowedUris: sub.allowed_uris,
                 parentId: this.sessionId,
                 uuid,
+                name: sub.name?.trim() || undefined,
             });
             children.push({ session: child, prompt: fullPrompt });
         }
@@ -754,7 +769,7 @@ export class BackendSession {
             `Created and started ${children.length} sub-agent(s):`,
             manifest,
             '',
-            'They are now running in the background. Each one reports back when it finishes; completion reports arrive as user messages. Continue your own work or end your turn to wait for them.',
+            'They are now running in the background. Each one reports back when it finishes; completion reports arrive as agent messages. Continue your own work or end your turn to wait for them.',
         ].join('\n');
     }
 

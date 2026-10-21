@@ -17,7 +17,6 @@
     "command.selectModel.title": "Select Model",
     "command.renameSession.title": "Rename Session",
     "command.debugContext.title": "Debug Context",
-    "command.pruneGhostBlocks.title": "Prune Outdated References",
     "command.toggleAutoApprove.title": "Enter Auto-Approve",
     "command.toggleAutoApproveOn.title": "Exit Auto-Approve",
     "command.compressConversation.title": "Compress Conversation",

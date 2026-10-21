@@ -24,6 +24,7 @@ import { isAutoApproveEnabled } from './approvalManager';
 import type { ApprovalRequestManager } from './approvalManager';
 import type { BackendSession } from './backendSession';
 import type { ContextPanelData, SessionSnapshot, Turn } from './events';
+import { getMessageType } from '../contextManagement/messageTypes';
 
 /**
  * Build committed RenderBlocks from an interaction message group
@@ -213,7 +214,8 @@ export async function buildSessionSnapshot(
     while (i < history.length) {
         const msg = history[i];
         if (msg.role === 'user') {
-            const messageIndex = i;
+            // Every user-role message opens a turn; the assistant/tool group up
+            // to the next user-role message belongs to its renderData.
             const group: AgentMessage[] = [];
             let j = i + 1;
             while (j < history.length && history[j].role !== 'user') {
@@ -221,13 +223,13 @@ export async function buildSessionSnapshot(
                 j++;
             }
             turns.push({
-                userText: extractText(msg),
-                messageIndex,
+                inbound: { messageType: getMessageType(msg), text: extractText(msg), historyIndex: i },
+                messageIndex: i,
                 renderData: { committed: buildInteractionRenderBlocks(group, isSubAgent), active: null },
             });
             i = j;
         } else {
-            // Orphan assistant/tool group (no preceding user message)
+            // Orphan assistant/tool group (no preceding user-role message)
             const messageIndex = i;
             const group: AgentMessage[] = [];
             while (i < history.length && history[i].role !== 'user') {
@@ -235,7 +237,7 @@ export async function buildSessionSnapshot(
                 i++;
             }
             turns.push({
-                userText: null,
+                inbound: null,
                 messageIndex,
                 renderData: { committed: buildInteractionRenderBlocks(group, isSubAgent), active: null },
             });

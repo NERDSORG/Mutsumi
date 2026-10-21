@@ -171,7 +171,7 @@ export class AgentRegistry {
      * not retained on the registry entry; it is only used here to derive a
      * default name and is enqueued by the caller
      * (`userMessage.send` / dispatch approval), so it passes through the
-     * `assembleUserMessage` pipeline exactly once.
+     * `assembleUserInput` pipeline exactly once.
      */
     async createAgent(options: CreateAgentOptions): Promise<BackendSession> {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri;
@@ -207,13 +207,14 @@ export class AgentRegistry {
             is_task_finished: false,
             model: selection.model,
             provider: selection.provider,
-            mtm_version: 2,
+            mtm_version: 3,
             sub_agents_list: [],
             contextItems: [{ type: 'macro', key: 'ROLE', content: options.agentType }],
             activeRules: defaults.rules,
             activeSkills: defaults.skills,
             agentType: options.agentType,
             enabledMcpTools: McpRegistry.getInstance().resolveDefaultSelection(options.mcpServers ?? defaults.mcpServers),
+            ...(options.name ? { title_locked: true } : {}),
         };
 
         await this.store.write(fileUri, metadata, []);

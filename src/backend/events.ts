@@ -5,19 +5,17 @@
  * FtB (frontend → backend) events are intents (commands); only the backend
  * subscribes to them. BtF (backend → frontend) events are facts (state
  * transitions); every frontend subscribes. Any FtB intent that changes
- * backend state must be answered by a corresponding BtF fact broadcast.
+ * backend state is answered by a corresponding BtF fact.
  *
- * Event names are collected into two `as const` arrays that double as the
- * runtime registry; the payload maps are cross-checked against them via
- * `satisfies` so a missing entry is a compile error.
- *
- * This module is imported by the webview bundle for its types: it must stay
- * free of vscode / Node value imports.
+ * The two `as const` name arrays double as the runtime registry; the payload
+ * maps are checked against them via `satisfies`. This module is imported by
+ * the webview bundle for its types: it must stay free of vscode / Node value
+ * imports.
  *
  * @module backend/events
  */
 
-import type { AgentMetadata, ContextItem, McpToolSelection } from '../types';
+import type { AgentMessageType, AgentMetadata, ContextItem, McpToolSelection } from '../types';
 import type { RenderData } from '../shared/renderTypes';
 
 // ============================================================================
@@ -30,10 +28,8 @@ export interface ApprovalRequestInfo {
     sessionId: string;
     toolName: string;
     /**
-     * The tool's own prettyPrint for the call that requested approval. May
-     * carry a leading `$(icon)` token: frontends that render codicons extract
-     * it (webview `extractLeadingIcon`); elsewhere it is stripped
-     * (`stripLeadingIconToken`).
+     * The tool's own prettyPrint for the requesting call; may carry a leading
+     * `$(icon)` token (extracted by the webview, stripped elsewhere).
      */
     actionDescription: string;
     targetUri: string;
@@ -45,17 +41,19 @@ export interface ApprovalRequestInfo {
 }
 
 /**
- * One conversation turn for snapshot replay: a user message plus the
- * assistant/tool message group that followed it, rendered as committed-only
- * RenderData. Orphan assistant/tool groups (no preceding user message) also
- * form a turn with `userText: null`.
+ * One conversation turn for snapshot replay: the inbound message that opened
+ * the turn row, plus the assistant/tool output following it as committed-only
+ * RenderData.
  */
 export interface Turn {
-    /** Raw text of the user message; null for orphan turns. */
-    userText: string | null;
     /**
-     * Index of the user message (or of the first message of an orphan group)
-     * in the flat history; consumed by `history.truncate`.
+     * The `role: 'user'` message that opened this row; null only for an orphan
+     * assistant/tool group at the head of the history.
+     */
+    inbound: { messageType: AgentMessageType; text: string; historyIndex: number } | null;
+    /**
+     * Index of the turn's opening message (or of the first message of an
+     * orphan group) in the flat history; consumed by `history.truncate`.
      */
     messageIndex: number;
     renderData: RenderData;
@@ -125,12 +123,11 @@ export interface FtBEventMap {
     'run.interrupt': { sessionId: string };
     /** Cascade-delete the message at fromIndex and everything after it. */
     'history.truncate': { sessionId: string; fromIndex: number };
-    'history.pruneGhostBlocks': { sessionId: string };
     'context.debug': { sessionId: string };
     'context.toggleRule': { sessionId: string; rule: string; active: boolean };
     'context.toggleSkill': { sessionId: string; skill: string; active: boolean };
     'context.setMcpTools': { sessionId: string; selection: McpToolSelection[] };
-    /** Stop tracking a referenced file (drops version tracking + ghost entries). */
+    /** Stop tracking a referenced file (drops its version tracking; history is never touched). */
     'context.removeFile': { sessionId: string; key: string };
     /** Remove a macro (template preprocessing no longer resolves it). */
     'context.removeMacro': { sessionId: string; key: string };
@@ -152,7 +149,7 @@ export interface FtBEventMap {
 export interface BtFEventMap {
     'session.created': { sessionId: string; requestId?: string; fileUri: string; metadata: AgentMetadata };
     'session.deleted': { sessionId: string };
-    /** Full snapshot; also broadcast after history-changing operations (truncate/prune). */
+    /** Full snapshot; hydration when a frontend starts displaying the session (`session.open`). */
     'session.state': SessionSnapshot;
     'session.output': { sessionId: string; renderData: RenderData };
     'session.status': {
@@ -162,8 +159,30 @@ export interface BtFEventMap {
         queuedCount: number;
     };
     'session.metadata': { sessionId: string; metadata: AgentMetadata };
-    /** A queued/steered user message has been committed into the history. */
-    'session.userMessageCommitted': { sessionId: string; text: string; historyIndex: number };
+    /**
+     * A committed inbound message, mounted as a card in the current turn row.
+     * `historyIndex` is its flat index; `text` is the raw input for `user`,
+     * the assembled text for `agent` and the terminal markdown for
+     * `injection`.
+     */
+    'session.inboundCommitted': {
+        sessionId: string;
+        messageType: AgentMessageType;
+        text: string;
+        historyIndex: number;
+    };
+    /**
+     * A new row opens: every committed `role: 'user'` message starts one,
+     * ahead of its own `session.inboundCommitted`; carries no visible content.
+     * `historyIndex` is the row-opening message's flat index (aligns the row
+     * menu's truncate).
+     */
+    'session.turnStarted': { sessionId: string; historyIndex: number };
+    /**
+     * The session history was cut at `fromIndex` (every message at or after it
+     * no longer exists); frontends drop the turn rows with index ≥ `fromIndex`.
+     */
+    'session.historyTruncated': { sessionId: string; fromIndex: number };
     'session.error': { sessionId: string; message: string; recoverable: boolean };
     'approval.requested': { sessionId: string; request: ApprovalRequestInfo };
     'approval.resolved': {
@@ -177,9 +196,8 @@ export interface BtFEventMap {
     /** Global event: the session tree/list changed; sidebars refresh. */
     'sessions.changed': Record<string, never>;
     /**
-     * Global event: the approval request list changed (a request was
-     * suspended, settled, auto-approved trace recorded, or an expired trace
-     * removed); the approval sidebar refreshes.
+     * Global event: the approval request list changed (a request suspended,
+     * settled, or a trace recorded/expired); the approval sidebar refreshes.
      */
     'approval.changed': Record<string, never>;
     /** Global event: auto-approve switch replay. */
@@ -202,7 +220,6 @@ export const FTB_EVENT_NAMES = [
     'userMessage.send',
     'run.interrupt',
     'history.truncate',
-    'history.pruneGhostBlocks',
     'context.debug',
     'context.toggleRule',
     'context.toggleSkill',
@@ -220,7 +237,9 @@ export const BTF_EVENT_NAMES = [
     'session.output',
     'session.status',
     'session.metadata',
-    'session.userMessageCommitted',
+    'session.inboundCommitted',
+    'session.turnStarted',
+    'session.historyTruncated',
     'session.error',
     'approval.requested',
     'approval.resolved',

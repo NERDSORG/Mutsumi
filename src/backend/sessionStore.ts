@@ -60,7 +60,7 @@ export class SessionStore {
 
     private async writeDirect(fileUri: vscode.Uri, metadata: AgentMetadata, context: AgentMessage[]): Promise<void> {
         const output = {
-            metadata: { ...metadata, mtm_version: 2 },
+            metadata: { ...metadata, mtm_version: 3 },
             context,
         };
         const encoded = new TextEncoder().encode(JSON.stringify(output, null, 2));

@@ -103,13 +103,9 @@ export class RenderDataBuilder {
     }
 
     /**
-     * Seals the current turn and starts a fresh one.
-     * @description Called when a steered user message is injected at a round
-     * boundary: the frontend seals the current streaming area on
-     * `session.userMessageCommitted`, so this builder resets to an empty
-     * state — subsequent `session.output` broadcasts only carry blocks of the
-     * new turn. Produced messages are already in the session history and
-     * replay through snapshots.
+     * Starts a fresh turn's render IR: clears committed/active state so the
+     * next `session.output` carries only the new turn's blocks (produced
+     * messages replay through snapshots).
      */
     commitTurnBoundary(): void {
         this.committedBlocks = [];

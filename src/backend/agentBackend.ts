@@ -143,7 +143,7 @@ export class AgentBackend {
     private async notifyParentOfDeletedChild(parentId: string, name: string, uuid: string): Promise<void> {
         try {
             const parent = await this.getOrMaterialize(parentId);
-            parent.enqueueUserMessage(
+            parent.enqueueAgentMessage(
                 `[System Notice] Sub-agent '${name}' (${uuid}) was deleted (cancelled).`,
                 'steer',
             );
@@ -221,12 +221,6 @@ export class AgentBackend {
             'history.truncate': payload => this.guard(payload.sessionId, async () => {
                 const session = await this.getOrMaterialize(payload.sessionId);
                 await session.truncateFrom(payload.fromIndex);
-                await session.broadcastSnapshot();
-            }),
-            'history.pruneGhostBlocks': payload => this.guard(payload.sessionId, async () => {
-                const session = await this.getOrMaterialize(payload.sessionId);
-                await session.pruneGhostBlocks();
-                await session.broadcastSnapshot();
             }),
             'context.debug': payload => this.guard(payload.sessionId, async () => {
                 const session = await this.getOrMaterialize(payload.sessionId);

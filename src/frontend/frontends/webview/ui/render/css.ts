@@ -15,6 +15,12 @@ export const RENDERER_CSS = `
   margin: 4px 0;
 }
 
+/* Cards in a turn's card area mirror the agent turn's inline inset, so their
+   gutter icons line up with the reasoning/tool rows rendered below them. */
+.mutsumi-turn-cards > .mutsumi-block {
+  padding: 0 4px;
+}
+
 /* Flat, VSCode-style: tool calls and reasoning own no surface at all — no
    background, no hairline, no shrink-wrap. They span the turn width, so
    expanding changes height only; the nested <pre> blocks stay the only visual
@@ -209,11 +215,14 @@ body.vscode-high-contrast-light .mutsumi-block pre > .mutsumi-copy-code {
   font-size: var(--vscode-editor-font-size, 13px);
 }
 
-/* Expanded reasoning gets a bare frame (no fill) so it reads as an aside
-   rather than as another paragraph of the answer. Same hairline language as
-   the composer island and the queue chip. De-emphasis comes from the parent
-   details' secondary text color, so the frame keeps full opacity. */
-.mutsumi-reasoning-content {
+/* Expanded reasoning, context-injection, and agent-message bodies get a bare
+   frame (no fill) so they read as an aside rather than as another paragraph
+   of the answer. Same hairline language as the composer island and the queue
+   chip. De-emphasis comes from the parent details' secondary text color, so
+   the frame keeps full opacity. */
+.mutsumi-reasoning-content,
+.mutsumi-injection-content,
+.mutsumi-agent-message-content {
   margin-top: 8px;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.4)));
   border-radius: 6px;

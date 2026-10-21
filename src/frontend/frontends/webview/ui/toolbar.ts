@@ -24,8 +24,8 @@ export interface ToolbarItem {
 }
 
 /**
- * The toolbar registry: insert image, rename session, prune stale
- * references, debug context, auto-approve switch, context panel toggle.
+ * The toolbar registry: insert image, rename session, debug context,
+ * auto-approve switch, context panel toggle.
  */
 export const TOOLBAR_ITEMS: ToolbarItem[] = [
     {
@@ -45,14 +45,6 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
         icon: 'pencil',
         run: (ctx) => {
             ctx.toggleRenameRow();
-        },
-    },
-    {
-        id: 'pruneGhostBlocks',
-        labelKey: 'chat.pruneGhostBlocks',
-        icon: 'clear-all',
-        run: (ctx) => {
-            ctx.sendFtB('history.pruneGhostBlocks', {});
         },
     },
     {

@@ -1,16 +1,8 @@
 /**
- * @fileoverview Context assembly for agent sessions.
- *
- * Three functions over the session's persisted state:
- *
- * - {@link assembleSystemPrompt}: metadata + workspace → system prompt
- * - {@link assembleUserMessage}: raw input text → persistable user message
- *   (template rendering, context-item differential, ghost block attachment)
- * - {@link assembleWireHistory}: persisted history → wire-protocol messages
- *   (ghost markdown projection, image part resolution)
- *
- * The persisted form is canonical; the wire form is a projection rebuilt on
- * every run. The history is a flat message array.
+ * @fileoverview Context assembly for agent sessions: system prompt assembly,
+ * user-input assembly (template rendering + context-item differential +
+ * injection markdown, returned as pure data) and wire projection of the
+ * persisted flat history.
  *
  * @module contextManagement/history
  */
@@ -23,22 +15,15 @@ import { TemplateEngine } from './templateEngine';
 import { SkillManager } from './skillManager';
 import {
     collectAvailableFileVersions,
-    decodeGhostBlock,
-    ghostBlockFromContextItems,
-    ghostBlockToMarkdown,
-    isEmptyGhostBlock
-} from './ghostBlocks';
+    injectionMarkdownFromItems,
+} from './contextInjection';
 import {
     parseUserMessageWithImages,
     extractMacroDefinitions,
     computeHash
 } from './utils';
 
-/**
- * Minimal session surface needed by history assembly.
- * Implemented by BackendSession; declared here so contextManagement does not
- * depend on the backend module graph.
- */
+/** Minimal session surface needed by history assembly (implemented by BackendSession). */
 export interface HistoryAssemblySession {
     readonly metadata: AgentMetadata;
     readonly history: AgentMessage[];
@@ -64,9 +49,8 @@ function persistedMacros(metadata: AgentMetadata): Record<string, string> {
 }
 
 /**
- * Assemble the system prompt from session metadata and workspace state.
- * Pure function of metadata + workspace: role macro, rules (recursively
- * collected, template-expanded) and skills markdown.
+ * Assemble the system prompt from session metadata and workspace state: role
+ * macro, template-expanded rules and skills markdown.
  */
 export async function assembleSystemPrompt(metadata: AgentMetadata): Promise<string> {
     const wsUri = requireWorkspaceUri();
@@ -85,21 +69,16 @@ export async function assembleSystemPrompt(metadata: AgentMetadata): Promise<str
 }
 
 /**
- * Assemble a persistable user message from raw input text.
- *
- * Runs the template engine in APPEND mode (collecting ghost items), performs
- * the hash/version differential against `metadata.contextItems`, updates the
- * persisted context items in place, and attaches the resulting ghost block to
- * the returned message's `metadata.last_ghost_block`.
- *
- * The returned message content is the template-rendered text WITHOUT the
- * ghost markdown (that is projected at wire-assembly time); image references
- * stay as markdown links (resolved to image parts at wire-assembly time).
+ * Assemble user input into pure data: rendered text plus injection markdown
+ * (null when there is nothing to display). Runs the template engine in APPEND
+ * mode and diffs hashes/versions against `metadata.contextItems` (updated in
+ * place); unchanged files still readable from an earlier injection become
+ * reference-only entries.
  */
-export async function assembleUserMessage(
+export async function assembleUserInput(
     session: HistoryAssemblySession,
     text: string
-): Promise<AgentMessage> {
+): Promise<{ text: string; injectionMarkdown: string | null }> {
     const metadata = session.metadata;
     const allowedUris = metadata.allowed_uris || ['/'];
     const wsUri = requireWorkspaceUri();
@@ -113,14 +92,10 @@ export async function assembleUserMessage(
         content,
     }));
 
-    // Ghost blocks of previous user messages, aligned by position; invalid or
-    // absent persisted values decode to null placeholders.
-    const previousGhostBlocks = session.history
-        .filter(m => m.role === 'user')
-        .map(m => decodeGhostBlock(m.metadata?.last_ghost_block));
-    const availableContentVersions = collectAvailableFileVersions(previousGhostBlocks);
+    // Full-content file versions carried by previous injection messages.
+    const availableContentVersions = collectAvailableFileVersions(session.history);
 
-    // Render the input (APPEND: collected items feed the ghost block)
+    // Render the input (APPEND: collected items feed the injection)
     const { renderedText: processedPrompt, collectedItems: currentContext } = await TemplateEngine.render(
         text,
         macros,
@@ -188,50 +163,34 @@ export async function assembleUserMessage(
     newContextItemsForMetadata.push(...macroContextItems);
     metadata.contextItems = newContextItemsForMetadata;
 
-    const currentGhostBlock = ghostBlockFromContextItems(finalItemsToDisplay);
-
-    const message: AgentMessage = {
-        role: 'user',
-        content: [{ type: 'text', text: processedPrompt }],
-        toolCalls: []
-    };
-    if (!isEmptyGhostBlock(currentGhostBlock)) {
-        message.metadata = { last_ghost_block: currentGhostBlock };
-    }
-    return message;
+    const injectionMarkdown = injectionMarkdownFromItems(finalItemsToDisplay);
+    return { text: processedPrompt, injectionMarkdown: injectionMarkdown || null };
 }
 
 /**
- * Project a persisted user message into wire form: image links resolved to
- * image parts, persisted ghost block projected to markdown and appended.
+ * Project one persisted message into wire form: user-role messages (text,
+ * agent and injection alike) resolve image links to multimodal parts; other
+ * roles pass through with pipeline metadata stripped.
  */
-export async function projectUserMessageToWire(msg: AgentMessage): Promise<AgentMessage> {
-    const content = await parseUserMessageWithImages(extractText(msg));
-    const ghost = decodeGhostBlock(msg.metadata?.last_ghost_block);
-    const ghostMarkdown = ghost && !isEmptyGhostBlock(ghost) ? ghostBlockToMarkdown(ghost) : '';
-    if (ghostMarkdown) {
-        content.push({ type: 'text', text: ghostMarkdown });
+export async function projectMessageToWire(msg: AgentMessage): Promise<AgentMessage> {
+    if (msg.role === 'user') {
+        const content = await parseUserMessageWithImages(extractText(msg));
+        return { role: 'user', content, toolCalls: [] };
     }
-    return { role: 'user', content, toolCalls: [] };
+    const { metadata: _pipelineMetadata, ...rest } = msg;
+    return rest as AgentMessage;
 }
 
 /**
- * Project the session's persisted flat history into wire-protocol messages:
- * user messages get their ghost markdown + image parts; assistant/tool
- * messages pass through (pipeline metadata stripped); system messages are
- * dropped (the system prompt is assembled separately).
+ * Project the flat history into wire messages; system messages are dropped.
  */
 export async function assembleWireHistory(session: HistoryAssemblySession): Promise<AgentMessage[]> {
     const wire: AgentMessage[] = [];
     for (const msg of session.history) {
-        if (msg.role === 'user') {
-            wire.push(await projectUserMessageToWire(msg));
-        } else if (msg.role === 'system') {
+        if (msg.role === 'system') {
             continue;
-        } else {
-            const { metadata: _pipelineMetadata, ...rest } = msg;
-            wire.push(rest as AgentMessage);
         }
+        wire.push(await projectMessageToWire(msg));
     }
     return wire;
 }

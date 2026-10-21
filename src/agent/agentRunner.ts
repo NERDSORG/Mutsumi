@@ -13,19 +13,14 @@ import { streamGenerate } from './generateStream';
 import type { StreamGenerateResult } from './interfaces';
 import { ToolExecutor } from './toolExecutor';
 import type { BackendSession } from '../backend/backendSession';
-import { projectUserMessageToWire } from '../contextManagement/history';
+import { projectMessageToWire } from '../contextManagement/history';
 import { debugLogger } from '../debugLogger';
 import type { AgentRunOptions } from './interfaces';
 
 /**
- * Executes the main agent loop for LLM interactions.
- * @description Manages the conversation flow with the LLM, handling streaming responses,
- * tool calls, and render-IR publishing. The session (BackendSession) owns the
- * history and render state; every produced message is appended immediately.
- * @class AgentRunner
- * @example
- * const runner = new AgentRunner(options, toolSet, session);
- * const newMessages = await runner.run(abortController, { systemPrompt, wireHistory });
+ * Executes the main agent loop for one turn: streams the LLM response,
+ * executes tool calls and publishes render IR through the session. The session
+ * owns history and render state; every produced message is appended immediately.
  */
 export class AgentRunner {
     /** Maximum number of tool interaction loops */
@@ -39,13 +34,7 @@ export class AgentRunner {
     /** Tool set for this agent instance */
     private toolSet: ToolSet;
 
-    /**
-     * Creates a new AgentRunner instance.
-     * @constructor
-     * @param {AgentRunOptions} options - Configuration options
-     * @param {ToolSet} toolSet - Tool set for this agent instance
-     * @param {BackendSession} session - The agent session
-     */
+    /** Creates a runner bound to one session, tool set and provider config. */
     constructor(
         private options: AgentRunOptions,
         toolSet: ToolSet,
@@ -54,8 +43,7 @@ export class AgentRunner {
         this.session = session;
         this.toolSet = toolSet;
         this.maxLoops = options.maxLoops || 30;
-        // One provider per runner instance, reused for the whole run: the
-        // ReasoningKeyDialect learning is meant to be shared across rounds.
+        // One provider per runner: ReasoningKeyDialect learning is shared across rounds.
         this.provider = createProvider({
             type: options.providerType,
             model: options.model,
@@ -64,18 +52,9 @@ export class AgentRunner {
             defaultHeaders: { 'User-Agent': 'KimiCLI/1.30.0' }
         } as ProviderConfig);
 
-        // reasoning_effort → withThinking mapping (frozen contract):
-        // - any concrete value (including 'off') → withThinking(value), passed
-        //   through verbatim; kosong treats unrecognized values as model-declared
-        //   efforts, so server validation errors stay visible to the user.
-        // - default (undefined) on the openai wire → withThinking('off'):
-        //   suppresses the adapter's auto-enable (it would otherwise send
-        //   reasoning_effort='medium' once history contains think parts);
-        //   without a configured offEffort this sends NO field on the wire —
-        //   byte-equivalent to the previous "default sends nothing" behavior.
-        // - default on other wires → no morph (server-side default; on kimi
-        //   withThinking('off') would actively send thinking=disabled, which
-        //   is "off", not "default", so it must not be used for suppression).
+        // reasoning_effort → withThinking: a concrete value (including 'off')
+        // passes through verbatim; undefined morphs to 'off' on the openai wire
+        // only, other wires keep the server-side default.
         const effort = options.reasoningEffort;
         if (effort !== undefined) {
             this.provider = this.provider.withThinking(effort);
@@ -85,12 +64,9 @@ export class AgentRunner {
     }
 
     /**
-     * Executes the main agent loop.
-     * @description Runs the conversation loop with the LLM, handling streaming,
-     * tool calls, round-boundary steering injection, and termination conditions.
-     * @param {AbortController} abortController - Controller for cancellation
-     * @param input - System prompt (explicit) and wire-projected history
-     * @returns {Promise<AgentMessage[]>} New messages produced during this run
+     * Run the loop: stream, execute tools, drain steered inbound items at round
+     * boundaries.
+     * @returns Messages produced during this run
      */
     async run(
         abortController: AbortController,
@@ -101,7 +77,7 @@ export class AgentRunner {
 
         const allowedUris = session.metadata.allowed_uris || ['/'];
 
-        // Initialize ToolExecutor here since we needed the builder
+        // ToolExecutor needs the render builder.
         if (!this.toolExecutor) {
             this.toolExecutor = new ToolExecutor(
                 this.toolSet,
@@ -121,8 +97,7 @@ export class AgentRunner {
             }
             loopCount++;
 
-            // Snapshot the builder at round start so a retry attempt can
-            // roll the UI back to "this round never started".
+            // Round-start snapshot for retry rollback.
             const roundSnapshot = builder.snapshotRound();
 
             let roundResult: StreamGenerateResult;
@@ -151,18 +126,14 @@ export class AgentRunner {
                     }
                 });
             } catch (error: any) {
-                // Handle network/API errors gracefully
                 const isCancellation = isAbortError(error) || abortController.signal.aborted;
 
                 if (isCancellation) {
-                    // User-initiated cancellation, just end gracefully
                     break;
                 }
 
-                // Network/API error — broadcast it (the session.error event is
-                // surfaced by the webview banner and the notification
-                // micro-frontend); the message stream only ever renders
-                // produced content, so nothing is appended to the render IR.
+                // Network/API error: broadcast it as `session.error`; nothing is
+                // appended to the render IR.
                 const errorMessage = error.message || String(error);
                 console.error('LLM Stream Error:', error);
                 session.reportError(errorMessage, true);
@@ -174,13 +145,11 @@ export class AgentRunner {
                 debugLogger.log(`[AgentRunner] traceId: ${roundResult.traceId}`);
             }
 
-            // The kosong-assembled message is the sole history source (think
-            // parts with encrypted signatures included; the display
-            // accumulators never feed history).
+            // The kosong-assembled message is the sole history source.
             const assistantMsg: AgentMessage = roundResult.message;
             messages.push(assistantMsg);
             newMessages.push(assistantMsg);
-            session.appendMessage(assistantMsg);
+            session.commitMessage(assistantMsg);
 
             if (assistantMsg.toolCalls.length === 0) {
                 break;
@@ -205,39 +174,30 @@ export class AgentRunner {
             messages.push(...toolMessages);
             newMessages.push(...toolMessages);
             for (const toolMessage of toolMessages) {
-                session.appendMessage(toolMessage);
+                session.commitMessage(toolMessage);
             }
 
-            // Handle task completion (e.g., from task_finish tool; the tool
-            // itself already reported through session.reportTaskFinished)
+            // task_finish already reported through session.reportTaskFinished.
             if (result.isTaskComplete) {
                 break;
             }
 
-            // Handle other termination cases (e.g., edit rejection)
+            // Edit rejection and other terminal tool outcomes.
             if (result.shouldTerminate) {
                 break;
             }
 
-            // Round boundary: inject steered user messages after the tool
-            // batch, before the next LLM call. Queue-mode messages are never
-            // injected here; they are handled by the drain loop after the run
-            // comes to a natural stop.
-            const steered = session.drainSteering();
-            for (const text of steered) {
-                const persisted = await session.commitUserMessage(text);
-                builder.commitTurnBoundary();
-                session.publishRenderData(builder.getRenderData());
-                const wireMessage = await projectUserMessageToWire(persisted);
-                messages.push(wireMessage);
-                newMessages.push(persisted);
+            // Round boundary: commit steered inbound items one at a time before
+            // the next LLM call; `queue` items drain after the run stops.
+            for await (const committed of session.drainInbound(queued => queued.mode === 'steer')) {
+                session.applyCommittedToTurn();
+                messages.push(await projectMessageToWire(committed));
+                newMessages.push(committed);
             }
         }
 
-        // Commit whatever remains in the active area so the turn's final state
-        // is fully committed. The final round has no tool calls and never hits
-        // the commitRoundUI path inside the loop; interrupt/error exits can
-        // also leave active content behind. A no-op when nothing is active.
+        // Commit any leftover active content so the turn's final state is fully
+        // committed; a no-op when nothing is active.
         builder.commitRoundUI('', '');
         session.publishRenderData(builder.getCommittedRenderData());
 

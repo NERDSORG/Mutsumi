@@ -9,14 +9,14 @@ import { codicon } from './codicon';
 import type { WebviewLabelKey } from '../interfaces';
 import type { UiContext } from './types';
 
-/** A turn as seen by menu actions. */
+/** A message row as seen by menu actions. */
 export interface MenuTurnContext {
-    /** Raw user text (null for orphan agent turns). */
-    userText: string | null;
-    /** Flat-history index of the user message (or orphan group start). */
+    /** Flat-history index of the message the menu acts on (truncate anchor). */
     messageIndex: number;
-    /** Markdown of the agent turn's committed content blocks. */
-    agentMarkdown: string;
+    /** Raw user text; set on user cards. */
+    userText?: string;
+    /** Markdown of the agent turn's content blocks; set on agent rows. */
+    agentMarkdown?: string;
 }
 
 export interface MessageMenuItem {
@@ -69,7 +69,7 @@ export const MESSAGE_MENUS: MessageMenuItem[] = [
         labelKey: 'chat.copy',
         icon: 'copy',
         run: (_ctx, turn) => {
-            void navigator.clipboard.writeText(turn.agentMarkdown);
+            void navigator.clipboard.writeText(turn.agentMarkdown ?? '');
         },
     },
     {

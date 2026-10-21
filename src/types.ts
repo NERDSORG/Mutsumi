@@ -84,6 +84,8 @@ export interface AgentMetadata {
     uuid: string;
     /** Display name of the agent */
     name: string;
+    /** When set, automatic title generation no longer overwrites the current name (set when explicitly named at creation or after any rename) */
+    title_locked?: boolean;
     /** ISO timestamp when the agent was created */
     created_at: string;
     /** Parent agent ID if this is a sub-agent, null otherwise */
@@ -122,16 +124,28 @@ export interface AgentMetadata {
 import type { Message } from '@moonshot-ai/kosong';
 
 /**
+ * Pipeline-only message type discriminator for role-'user' messages.
+ * 'user': normal user input (default). 'injection': terminal context-injection
+ * markdown, committed as-is. 'agent': agent-to-agent communication, rendered
+ * as its own UI block without a user-bubble event.
+ */
+export type AgentMessageType = 'user' | 'injection' | 'agent';
+
+/**
  * Message in an agent conversation.
  * Kosong `Message` in full (`content: ContentPart[]` and `toolCalls: ToolCall[]`
- * are both required) plus the Mutsumi cell↔message pipeline metadata channel.
- * `metadata` carries ghost-block / interaction state and never goes on the wire
- * (outbound messages are always rebuilt by explicit field construction).
+ * are both required) plus the Mutsumi inbound-pipeline metadata channel.
+ * `metadata` never goes on the wire (wire assembly strips it from every
+ * message).
  * @interface AgentMessage
  */
 export interface AgentMessage extends Message {
-    /** Pipeline-only metadata (e.g. ghost block state, mutsumi_interaction) */
-    metadata?: { [key: string]: any };
+    /**
+     * Pipeline-only type discriminator; stripped at wire-assembly time.
+     * Meaningful only on role 'user'; absent ≡ 'user'; producers write the
+     * field only for non-default values.
+     */
+    metadata?: { messageType?: AgentMessageType };
 }
 
 /**

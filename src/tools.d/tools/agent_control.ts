@@ -7,7 +7,7 @@ export const dispatchSubagentsTool: ITool = {
     name: 'dispatch_subagents',
     definition: withBrief({
         name: 'dispatch_subagents',
-        description: 'Split into multiple parallel sub-agents. Sub-agents are created and start running in the background immediately after user approval. This call returns right away with their session ids — it does NOT wait for them. Each sub-agent reports back when it finishes (task_finish): completion reports arrive as user messages. You can also message them (or they you) at any time with the communicate tool.',
+        description: 'Split into multiple parallel sub-agents. Sub-agents are created and start running in the background immediately after user approval. This call returns right away with their session ids — it does NOT wait for them. Each sub-agent reports back when it finishes (task_finish): completion reports arrive as agent messages. You can also message them (or they you) at any time with the communicate tool. You must give every sub-agent a short, distinctive name (it becomes its session title).',
         parameters: {
             type: 'object',
             properties: {
@@ -29,9 +29,10 @@ export const dispatchSubagentsTool: ITool = {
                             agent_type: {
                                 type: 'string',
                                 description: 'The agent type for this sub-agent (e.g., "chat", "orchestrator", "implementer", "reviewer"). The model and capabilities are determined by the agent type configuration. Defaults to "implementer" if not specified.'
-                            }
+                            },
+                            name: { type: 'string', description: 'Short distinctive display name for this sub-agent; becomes its session title.' }
                         },
-                        required: ['prompt', 'allowed_uris']
+                        required: ['prompt', 'allowed_uris', 'name']
                     }
                 }
             },
@@ -87,7 +88,7 @@ export const dispatchSubagentsTool: ITool = {
 
             // Approval gate first: nothing is created unless approved.
             const details = normalizedSubAgents
-                .map((sub: any, i: number) => `${i + 1}. [${sub.agent_type || 'implementer'}] ${String(sub.prompt).slice(0, 200)}\n   allowed_uris: ${(sub.allowed_uris ?? []).join(', ')}`)
+                .map((sub: any, i: number) => `${i + 1}. [${sub.name}] (${sub.agent_type || 'implementer'}) ${String(sub.prompt).slice(0, 200)}\n   allowed_uris: ${(sub.allowed_uris ?? []).join(', ')}`)
                 .join('\n');
             const rejectionMsg = await context.session.requestApproval(
                 context,
@@ -155,7 +156,7 @@ export const communicateTool: ITool = {
     name: 'communicate',
     definition: withBrief({
         name: 'communicate',
-        description: 'Send a message to another agent session by its session UUID (e.g. your parent agent, or a sibling sub-agent from the same dispatch). The message arrives as a user message in that session: if it is running, it is injected at the next round boundary; if it is stopped, it wakes up to process your message.',
+        description: 'Send a message to another agent session by its session UUID (e.g. your parent agent, or a sibling sub-agent from the same dispatch). The message arrives as an agent message in that session: if it is running, it is injected at the next round boundary; if it is stopped, it wakes up to process your message.',
         parameters: {
             type: 'object',
             properties: {
