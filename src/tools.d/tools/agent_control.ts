@@ -5,6 +5,7 @@ import { getBrief, withBrief } from '../brief';
 
 export const dispatchSubagentsTool: ITool = {
     name: 'dispatch_subagents',
+    assemblyExcluded: true,
     definition: withBrief({
         name: 'dispatch_subagents',
         description: 'Split into multiple parallel sub-agents. Sub-agents are created and start running in the background immediately after user approval. This call returns right away with their session ids — it does NOT wait for them. Each sub-agent reports back when it finishes (task_finish): completion reports arrive as agent messages. You can also message them (or they you) at any time with the communicate tool. You must give every sub-agent a short, distinctive name (it becomes its session title).',
@@ -121,6 +122,7 @@ export const dispatchSubagentsTool: ITool = {
 
 export const taskFinishTool: ITool = {
     name: 'task_finish',
+    assemblyExcluded: true,
     definition: {
         name: 'task_finish',
         description: 'Mark task as complete and submit report. The report is delivered to your parent agent as a message. May be called again later to send an updated report.',
@@ -154,6 +156,7 @@ export const taskFinishTool: ITool = {
 
 export const communicateTool: ITool = {
     name: 'communicate',
+    assemblyExcluded: true,
     definition: withBrief({
         name: 'communicate',
         description: 'Send a message to another agent session by its session UUID (e.g. your parent agent, or a sibling sub-agent from the same dispatch). The message arrives as an agent message in that session: if it is running, it is injected at the next round boundary; if it is stopped, it wakes up to process your message.',

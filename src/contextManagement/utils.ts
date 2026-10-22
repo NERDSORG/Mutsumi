@@ -3,10 +3,12 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { TextDecoder } from "util";
 import type { ToolContext } from "../tools.d/interface";
+import type { BackendSession } from "../backend/backendSession";
+import type { InboundExecution } from "../backend/interfaces";
 import type { ContentPart } from "@moonshot-ai/kosong";
 import { ContextItem } from "../types";
 import { ToolSession } from "../tools.d/toolSession";
-import { PreExecutionToolController, getPreExecutionSession, withPreExecution } from "../tools.d/preExecution";
+import { getCachedResult, setCachedResult } from "../tools.d/cache";
 
 /** Image regex: matches Markdown images in ![alt](uri) format */
 export const IMG_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
@@ -224,27 +226,53 @@ export function shouldRecurseFile(uri: vscode.Uri): boolean {
 }
 
 /**
- * Execute a user-authored pre-execution tool call (`@[tool{...}]`) by name.
- * Runs on the pre-execution tool plane: built-in common tools plus every
- * currently available MCP tool, always without approval.
+ * Execute one template tool call against the item's execution policy; tools marked
+ * `assemblyExcluded` throw, which the caller turns into an error item.
  */
 export async function executeToolCall(
 	name: string,
 	args: any,
 	allowedUris: string[],
+	session: BackendSession,
+	execution: InboundExecution,
 ): Promise<string> {
-	const controller = PreExecutionToolController.getInstance();
-	const session = getPreExecutionSession();
+	if (execution.toolSet.getTool(name)?.assemblyExcluded) {
+		throw new Error(`The ${name} tool cannot be executed during context assembly.`);
+	}
+
 	const context: ToolContext = {
 		allowedUris: allowedUris,
 		session,
 		toolSession: new ToolSession(session.id, name),
-		// Pre-execution calls produce no approval trace and need no pretty-print
-		// summary; the tool name is a sufficient placeholder.
 		callDescription: name,
-		signalTermination: () => {}, // No-op for user's explicit tool pre-execution
+		signalTermination: () => {}, // No-op.
+		skipApproval: execution.skipApproval,
 	};
-	return await withPreExecution(() => controller.executeTool(name, args, context, false));
+
+	const { toolSet } = execution;
+	const shouldCache = toolSet.getShouldCache(name);
+
+	if (shouldCache) {
+		const cached = getCachedResult(name, args);
+		if (cached !== undefined) {
+			return cached;
+		}
+	}
+
+	const result = await toolSet.execute(name, args, context);
+
+	if (shouldCache) {
+		setCachedResult(name, args, result);
+	}
+
+	return result;
+}
+
+/**
+ * Compute SHA-256 hash of content
+ */
+export function computeHash(content: string): string {
+	return crypto.createHash("sha256").update(content).digest("hex");
 }
 
 /**
@@ -254,13 +282,6 @@ export async function executeToolCall(
  * 2. Explicit definition: @{define KEY, VALUE} (Value can be quoted or unquoted)
  * Returns a map of macros found
  */
-/**
- * Compute SHA-256 hash of content
- */
-export function computeHash(content: string): string {
-	return crypto.createHash("sha256").update(content).digest("hex");
-}
-
 export function extractMacroDefinitions(text: string): Record<string, string> {
 	const macros: Record<string, string> = {};
 

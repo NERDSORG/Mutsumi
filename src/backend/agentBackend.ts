@@ -14,7 +14,6 @@
 
 import * as vscode from 'vscode';
 import { debugLogger } from '../debugLogger';
-import { registerPreExecutionSessionFactory } from '../tools.d/preExecution';
 import { EventBus } from './eventBus';
 import { SessionStore } from './sessionStore';
 import { AgentRegistry } from './agentRegistry';
@@ -37,7 +36,6 @@ export class AgentBackend {
     /** Materialized sessions by uuid (never evicted). */
     private readonly sessions = new Map<string, BackendSession>();
     private readonly sessionDeps: BackendSessionDeps;
-    private preExecutionSession: BackendSession | null = null;
 
     constructor() {
         this.approvals = new ApprovalRequestManager(this.bus);
@@ -69,7 +67,6 @@ export class AgentBackend {
     async initialize(): Promise<void> {
         await this.registry.scanAllAgents();
         this.registerHandlers();
-        registerPreExecutionSessionFactory(() => this.getPreExecutionSession());
     }
 
     /**
@@ -273,15 +270,5 @@ export class AgentBackend {
                 debugLogger.log(`[AgentBackend] handler error for ${sessionId}: ${message}`);
                 this.bus.emitBtF('session.error', { sessionId, message, recoverable: true });
             });
-    }
-
-    /** Shared ephemeral session for template pre-execution (`@[tool{...}]`). */
-    private getPreExecutionSession(): BackendSession {
-        if (!this.preExecutionSession) {
-            this.preExecutionSession = BackendSession.createEphemeral(this.sessionDeps, {
-                emptyToolSet: true,
-            });
-        }
-        return this.preExecutionSession;
     }
 }

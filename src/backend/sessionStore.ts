@@ -21,6 +21,9 @@
 import * as vscode from 'vscode';
 import type { AgentMessage, AgentMetadata } from '../types';
 
+/** Current .mtm format version. */
+export const MTM_VERSION = 3;
+
 /**
  * Direct reader/writer for .mtm session files.
  */
@@ -60,7 +63,7 @@ export class SessionStore {
 
     private async writeDirect(fileUri: vscode.Uri, metadata: AgentMetadata, context: AgentMessage[]): Promise<void> {
         const output = {
-            metadata: { ...metadata, mtm_version: 3 },
+            metadata: { ...metadata, mtm_version: MTM_VERSION },
             context,
         };
         const encoded = new TextEncoder().encode(JSON.stringify(output, null, 2));

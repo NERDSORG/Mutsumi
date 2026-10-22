@@ -8,6 +8,8 @@ import {
     extractMacroDefinitions
 } from './utils';
 import { ContextItem } from '../types';
+import type { BackendSession } from '../backend/backendSession';
+import type { InboundExecution } from '../backend/interfaces';
 
 /**
  * Template Engine Class
@@ -23,6 +25,8 @@ export class TemplateEngine {
      * @param allowedUris - Allowed URIs for security
      * @param mode - Parse mode (INLINE or APPEND)
      * @param processingStack - Stack of URIs being processed (for circular reference detection)
+     * @param execution - Tool execution policy; tool calls are left untouched without it
+     * @param session - Session that owns the tool calls
      * @returns {Promise<{ renderedText: string; collectedItems: ContextItem[] }>}
      */
     static async render(
@@ -31,7 +35,9 @@ export class TemplateEngine {
         rootUri: vscode.Uri,
         allowedUris: string[],
         mode: 'INLINE' | 'APPEND' = 'INLINE',
-        processingStack: string[] = []
+        processingStack: string[] = [],
+        execution?: InboundExecution,
+        session?: BackendSession
     ): Promise<{ renderedText: string; collectedItems: ContextItem[] }> {
         const collectedItems: ContextItem[] = [];
         
@@ -47,7 +53,9 @@ export class TemplateEngine {
             allowedUris,
             mode,
             collectedItems,
-            processingStack
+            processingStack,
+            execution,
+            session
         );
 
         return { renderedText, collectedItems };
@@ -63,7 +71,9 @@ export class TemplateEngine {
         allowedUris: string[],
         mode: 'INLINE' | 'APPEND',
         collectedItems: ContextItem[],
-        processingStack: string[] = []
+        processingStack: string[] = [],
+        execution?: InboundExecution,
+        session?: BackendSession
     ): Promise<string> {
         if (!text.includes('@[')) return text;
 
@@ -98,7 +108,9 @@ export class TemplateEngine {
                     allowedUris,
                     mode,
                     collectedItems,
-                    text.substring(start, endIdx + 1)
+                    text.substring(start, endIdx + 1),
+                    execution,
+                    session
                 );
             } else {
                 // This is a file reference
@@ -110,7 +122,9 @@ export class TemplateEngine {
                     mode,
                     collectedItems,
                     text.substring(start, endIdx + 1),
-                    processingStack
+                    processingStack,
+                    execution,
+                    session
                 );
             }
 
@@ -130,8 +144,14 @@ export class TemplateEngine {
         allowedUris: string[],
         mode: 'INLINE' | 'APPEND',
         collectedItems: ContextItem[],
-        originalTag: string
+        originalTag: string,
+        execution?: InboundExecution,
+        session?: BackendSession
     ): Promise<string> {
+        // Without a policy the tag stays literal.
+        if (!execution || !session) {
+            return originalTag;
+        }
         try {
             // Preprocess the content to handle macros in arguments
             const processedContent = pp.preprocess(content, context, { type: 'html' });
@@ -147,7 +167,7 @@ export class TemplateEngine {
             const jsonArgs = processedContent.substring(braceStart, braceEnd + 1);
             const args = JSON.parse(jsonArgs);
             
-            const output = await executeToolCall(toolName, args, allowedUris);
+            const output = await executeToolCall(toolName, args, allowedUris, session, execution);
 
             if (mode === 'INLINE') {
                 return output;
@@ -190,7 +210,9 @@ export class TemplateEngine {
         mode: 'INLINE' | 'APPEND',
         collectedItems: ContextItem[],
         originalTag: string,
-        processingStack: string[] = []
+        processingStack: string[] = [],
+        execution?: InboundExecution,
+        session?: BackendSession
     ): Promise<string> {
         try {
             // Preprocess the path to handle macros
@@ -235,7 +257,9 @@ export class TemplateEngine {
                 rootUri,
                 allowedUris,
                 'INLINE',
-                [...processingStack, uriKey]
+                [...processingStack, uriKey],
+                execution,
+                session
             );
 
             if (mode === 'INLINE') {

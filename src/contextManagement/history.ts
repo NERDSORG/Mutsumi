@@ -22,8 +22,10 @@ import {
     extractMacroDefinitions,
     computeHash
 } from './utils';
+import type { BackendSession } from '../backend/backendSession';
+import type { InboundExecution } from '../backend/interfaces';
 
-/** Minimal session surface needed by history assembly (implemented by BackendSession). */
+/** Minimal session surface needed by wire projection (implemented by BackendSession). */
 export interface HistoryAssemblySession {
     readonly metadata: AgentMetadata;
     readonly history: AgentMessage[];
@@ -48,16 +50,24 @@ function persistedMacros(metadata: AgentMetadata): Record<string, string> {
     return macros;
 }
 
-/**
- * Assemble the system prompt from session metadata and workspace state: role
- * macro, template-expanded rules and skills markdown.
- */
-export async function assembleSystemPrompt(metadata: AgentMetadata): Promise<string> {
+/** Assemble the system prompt: role macro, template-expanded rules and skills markdown. */
+export async function assembleSystemPrompt(
+    metadata: AgentMetadata,
+    session: BackendSession,
+    execution: InboundExecution
+): Promise<string> {
     const wsUri = requireWorkspaceUri();
     const allowedUris = metadata.allowed_uris || ['/'];
     const isSubAgent = !!metadata.parent_agent_id;
 
-    const rulesItems = await getRulesContext(wsUri, allowedUris, metadata.activeRules, persistedMacros(metadata));
+    const rulesItems = await getRulesContext(
+        wsUri,
+        allowedUris,
+        metadata.activeRules,
+        persistedMacros(metadata),
+        session,
+        execution
+    );
     let systemPromptContent = await getSystemPrompt(wsUri, allowedUris, rulesItems, isSubAgent);
 
     const skillsMarkdown = SkillManager.getInstance().generateSkillsMarkdown(metadata.activeSkills);
@@ -69,15 +79,13 @@ export async function assembleSystemPrompt(metadata: AgentMetadata): Promise<str
 }
 
 /**
- * Assemble user input into pure data: rendered text plus injection markdown
- * (null when there is nothing to display). Runs the template engine in APPEND
- * mode and diffs hashes/versions against `metadata.contextItems` (updated in
- * place); unchanged files still readable from an earlier injection become
- * reference-only entries.
+ * Assemble user input into pure data: rendered text plus injection markdown (null when empty),
+ * running the template engine in APPEND mode under `execution` and diffing `metadata.contextItems`.
  */
 export async function assembleUserInput(
-    session: HistoryAssemblySession,
-    text: string
+    session: BackendSession,
+    text: string,
+    execution?: InboundExecution
 ): Promise<{ text: string; injectionMarkdown: string | null }> {
     const metadata = session.metadata;
     const allowedUris = metadata.allowed_uris || ['/'];
@@ -101,7 +109,10 @@ export async function assembleUserInput(
         macros,
         wsUri,
         allowedUris,
-        'APPEND'
+        'APPEND',
+        [],
+        execution,
+        session
     );
 
     // Differential update against persisted context items

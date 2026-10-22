@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { TextDecoder } from 'util';
 import { ContextItem } from '../types';
 import { TemplateEngine } from './templateEngine';
+import type { BackendSession } from '../backend/backendSession';
+import type { InboundExecution } from '../backend/interfaces';
 
 /**
  * @description Initialize rules directory and default rules files
@@ -109,13 +111,17 @@ Tool arguments named \`brief\` are shown to the user in the execution trace. Wri
  * @param allowedUris - List of allowed URIs for security
  * @param activeRules - Optional list of rule filenames to include. If undefined, all rules are included.
  * @param context - Optional context object for macro definitions
+ * @param session - Session that owns the rules' tool calls
+ * @param execution - Tool execution policy of the rules
  * @returns Array of context items representing rules
  */
 export async function getRulesContext(
     workspaceUri: vscode.Uri, 
     allowedUris: string[],
-    activeRules?: string[],
-    context?: Record<string, any>
+    activeRules: string[] | undefined,
+    context: Record<string, any> | undefined,
+    session: BackendSession,
+    execution: InboundExecution
 ): Promise<ContextItem[]> {
     if (workspaceUri.scheme !== 'file') {
         console.warn('Rules context requires a file:// workspace URI');
@@ -137,14 +143,15 @@ export async function getRulesContext(
             const decodedContent = new TextDecoder().decode(content);
 
             // Use TemplateEngine.render with INLINE mode to expand rules.
-            // Tool pre-execution inside the template enters the pre-execution
-            // plane by itself and runs without approval.
             const { renderedText: expandedContent } = await TemplateEngine.render(
                 decodedContent,
                 context || {},
                 workspaceUri,
                 allowedUris,
-                'INLINE'
+                'INLINE',
+                [],
+                execution,
+                session
             );
 
             items.push({

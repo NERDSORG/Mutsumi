@@ -4,8 +4,8 @@
  * @description
  * This module provides a global, shared cache for tool execution results and
  * intermediate variables used by tools. It is used by both:
- * - ToolExecutor (for Agent runtime tool execution)
- * - PreExecutionToolController (for pre-execution in context management)
+ * - The agent runtime tool executor
+ * - Assembly-time tool execution in context management (`@[tool{...}]`)
  *
  * The cache is intentionally global and not tied to any specific Agent,
  * as tool results and intermediate variables depend only on the code state,

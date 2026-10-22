@@ -1,20 +1,8 @@
 /**
- * @fileoverview Backend approval request manager.
- *
- * The manager is the single authority for tool approvals. A request either
- * auto-approves (global setting / pre-execution plane) or is broadcast as
- * `approval.requested` and suspended until some frontend answers with
- * `approval.respond`; the first respond wins and an `approval.resolved` fact
- * is broadcast so every other frontend immediately drops the card.
- *
- * Rejection reasons arrive with the respond payload.
- *
- * Any change to the request list (a request is suspended, settled, an
- * auto-approved trace is recorded, or an expired trace is removed) is
- * broadcast as the bare `approval.changed` notification; the in-process
- * sidebar approval tree subscribes to it and reads the records back via
- * `getAllRequests()` (the same pattern as `sessions.changed` for the agent
- * tree).
+ * @fileoverview Backend approval request manager: the single authority for tool
+ * approvals. A request auto-approves (global switch, or the caller's `skipApproval`)
+ * or is broadcast as `approval.requested` until the first `approval.respond` wins;
+ * every list change emits the bare `approval.changed` notification.
  *
  * @module backend/approvalManager
  */
@@ -28,7 +16,6 @@ import type {
     ApprovalRequestRecord,
     ApprovalResolution,
 } from './interfaces';
-import { isInPreExecution } from '../tools.d/preExecution';
 
 const AUTO_APPROVE_CONFIG_KEY = 'mutsumi.autoApproveEnabled';
 
@@ -60,14 +47,12 @@ export class ApprovalRequestManager {
     constructor(private readonly bus: EventBus) {}
 
     /**
-     * Request approval for a tool action. Auto-approves (with a recorded
-     * trace, `id: null`) when the global switch is on or the call happens on
-     * the pre-execution plane. Returns the request id (needed by edit
-     * transactions to cancel a pending request) plus the resolution promise.
+     * Request approval for a tool action; auto-approves (trace recorded, `id: null`) on the
+     * global switch, or without a trace when the caller carries `skipApproval`.
      */
     request(init: ApprovalRequestInit): { id: string | null; promise: Promise<ApprovalResolution> } {
-        const preExecution = isInPreExecution();
-        const autoApprove = isAutoApproveEnabled() || preExecution;
+        const skipApproval = init.skipApproval === true;
+        const autoApprove = isAutoApproveEnabled() || skipApproval;
 
         if (autoApprove) {
             const promise = (async (): Promise<ApprovalResolution> => {
@@ -75,10 +60,8 @@ export class ApprovalRequestManager {
                     const payload = await init.onApprove?.();
                     return { kind: 'approved', payload };
                 } finally {
-                    // Pre-execution calls are explicitly authored by the user
-                    // (`@[tool{...}]`), so they leave no approval trace; the
-                    // global auto-approve switch keeps its trace for auditing.
-                    if (!preExecution) {
+                    // `skipApproval` calls leave no trace; the global switch keeps its own.
+                    if (!skipApproval) {
                         this.recordTrace(init, true);
                     }
                 }

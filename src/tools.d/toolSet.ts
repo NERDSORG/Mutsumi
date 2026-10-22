@@ -148,6 +148,11 @@ export class ToolSet {
 		};
 	}
 
+	/** Gets a tool by name, or undefined when absent. */
+	getTool(name: string): ITool | undefined {
+		return this.tools.get(name);
+	}
+
 	/**
 	 * Checks if a tool is available in this tool set.
 	 * @param {string} name - Tool name

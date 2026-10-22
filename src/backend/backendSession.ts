@@ -18,6 +18,7 @@ import type { RenderData } from '../shared/renderTypes';
 import { RenderDataBuilder } from '../agent/renderDataBuilder';
 import { ToolSet } from '../tools.d/toolSet';
 import { createEmptyToolSet, createToolSetForAgent } from '../tools.d/agentToolSet';
+import { getUserToolSet } from '../tools.d/userToolSet';
 import type { ToolContext } from '../tools.d/interface';
 import type { AgentRunOptions } from '../agent/interfaces';
 import { normalizeReasoningEffort } from '../agent/types';
@@ -43,12 +44,35 @@ import type {
     BackendSessionDeps,
     BackendSessionOptions,
     DispatchRequestItem,
+    InboundExecution,
     InboundItem,
     QueuedInbound,
     SessionStatus,
     SessionStopReason,
 } from './interfaces';
 import { buildSessionSnapshot, formatMessagesToString } from './snapshot';
+
+/** Execution policy snapshot of an agent-authored item; undefined when the author has no agent type. */
+function agentExecution(author: BackendSession | undefined): InboundExecution | undefined {
+    const agentType = author?.metadata.agentType;
+    if (!author || !agentType) {
+        return undefined;
+    }
+    return {
+        toolSet: createToolSetForAgent({
+            agentType,
+            agentId: author.sessionId,
+            parentAgentId: author.metadata.parent_agent_id,
+            enabledMcpTools: author.metadata.enabledMcpTools,
+        }),
+        skipApproval: false,
+    };
+}
+
+/** Execution policy of a user- or rules-authored item: the user plane, without approval. */
+function userPlaneExecution(): InboundExecution {
+    return { toolSet: getUserToolSet(false), skipApproval: true };
+}
 
 /**
  * The single session implementation. See module docstring.
@@ -179,15 +203,12 @@ export class BackendSession {
     }
 
     /**
-     * Commit one inbound item: every kind assembles through the template
-     * pipeline, then commits a `role: 'user'` message carrying the assembled
-     * text and `metadata.messageType` set to the item's kind (`user` stays
-     * untagged), followed by the derived injection message when the assembly
-     * produced one. Turn events fire in `drainInbound`.
+     * Commit one inbound item: assemble it, then commit a `role: 'user'` message tagged with
+     * the item's kind (`user` untagged) followed by the derived injection message, if any.
      * @returns The committed messages in commit order
      */
     private async commitInbound(item: InboundItem): Promise<AgentMessage[]> {
-        const { text, injectionMarkdown } = await assembleUserInput(this, item.text);
+        const { text, injectionMarkdown } = await assembleUserInput(this, item.text, item.execution);
         const message: AgentMessage = {
             role: 'user',
             content: [{ type: 'text', text }],
@@ -211,25 +232,23 @@ export class BackendSession {
     // Queue / run semantics
     // ------------------------------------------------------------------
 
-    /** Enqueue a user message; starts the drain loop when idle. */
+    /** Enqueue a user message; its `@[tool{...}]` runs on the user plane without approval. */
     enqueueUserMessage(text: string, mode: 'queue' | 'steer' = 'queue'): void {
-        this.enqueue({ kind: 'user', text }, mode);
+        this.enqueue({ kind: 'user', text, execution: userPlaneExecution() }, mode);
     }
 
-    /**
-     * Enqueue a context-injection message from its markdown source; entry
-     * point for injection producers. Starts the drain loop when idle.
-     */
+    /** Enqueue a context-injection message (final markdown); its `@[tool{...}]` stays literal. */
     enqueueInjection(text: string, mode: 'queue' | 'steer' = 'queue'): void {
         this.enqueue({ kind: 'injection', text }, mode);
     }
 
-    /**
-     * Enqueue an agent-to-agent message; commits as an agent message (own UI
-     * block, no user-bubble event). Starts the drain loop when idle.
-     */
-    enqueueAgentMessage(text: string, mode: 'queue' | 'steer' = 'queue'): void {
-        this.enqueue({ kind: 'agent', text }, mode);
+    /** Enqueue an agent-to-agent message; the author's tool-set snapshot governs its `@[tool{...}]`. */
+    enqueueAgentMessage(
+        text: string,
+        mode: 'queue' | 'steer' = 'queue',
+        author?: BackendSession,
+    ): void {
+        this.enqueue({ kind: 'agent', text, execution: agentExecution(author) }, mode);
     }
 
     private enqueue(item: InboundItem, mode: 'queue' | 'steer'): void {
@@ -241,12 +260,8 @@ export class BackendSession {
     }
 
     /**
-     * The single inbound drain, hung at two points: round boundary (`due` =
-     * steered only, by the runner) and turn startup (`due` = all, by
-     * `executeTurn`). Rescans the queue per item and yields in commit order,
-     * the caller completing each item's wire work before the next pull. Every
-     * committed message opens a new row: `session.turnStarted` followed by
-     * `session.inboundCommitted`.
+     * Drain due inbound items, yielding in commit order (the caller finishes each item before the
+     * next pull) and emitting `turnStarted` + `inboundCommitted` per committed message.
      */
     async *drainInbound(due: (queued: QueuedInbound) => boolean): AsyncGenerator<AgentMessage> {
         for (;;) {
@@ -334,7 +349,7 @@ export class BackendSession {
             }
             firstTurn = !preDrainHadUserMessage && batchContainedUserMessage;
 
-            const systemPrompt = await assembleSystemPrompt(this.metadata);
+            const systemPrompt = await assembleSystemPrompt(this.metadata, this, userPlaneExecution());
             const wireHistory = await assembleWireHistory(this);
             const toolSet = this.buildToolSet();
             const options = this.resolveRunOptions();
@@ -623,7 +638,7 @@ export class BackendSession {
         }
         const target = await this.deps.materializeSession(targetUuid);
         const wasRunning = target.status === 'running';
-        target.enqueueAgentMessage(text, 'steer');
+        target.enqueueAgentMessage(text, 'steer', this);
         return wasRunning
             ? `Message delivered to agent '${targetEntry.name}'; it will see it at the next round boundary.`
             : `Message delivered to agent '${targetEntry.name}'; it will wake up and process it.`;
@@ -635,7 +650,7 @@ export class BackendSession {
 
     /** Assemble the complete LLM context (system + wire history) for debugging. */
     async debugContext(): Promise<string> {
-        const systemPrompt = await assembleSystemPrompt(this.metadata);
+        const systemPrompt = await assembleSystemPrompt(this.metadata, this, userPlaneExecution());
         const wire = await assembleWireHistory(this);
         const messages: AgentMessage[] = [
             { role: 'system', content: [{ type: 'text', text: systemPrompt }], toolCalls: [] },
@@ -679,7 +694,7 @@ export class BackendSession {
      */
     requestApprovalWithAction(
         context: ToolContext,
-        init: Omit<ApprovalRequestInit, 'sessionId' | 'abortSignal' | 'actionDescription' | 'toolName'> & { abortSignal?: AbortSignal },
+        init: Omit<ApprovalRequestInit, 'sessionId' | 'abortSignal' | 'actionDescription' | 'toolName' | 'skipApproval'> & { abortSignal?: AbortSignal },
     ): { requestId: string | null; promise: Promise<ApprovalResolution> } {
         const { id, promise } = this.deps.approvals.request({
             ...init,
@@ -687,6 +702,7 @@ export class BackendSession {
             actionDescription: context.callDescription,
             sessionId: this.sessionId,
             abortSignal: init.abortSignal ?? this.currentAbort?.signal,
+            skipApproval: context.skipApproval,
         });
         return { requestId: id, promise };
     }
@@ -759,7 +775,7 @@ export class BackendSession {
         }
 
         for (const child of children) {
-            child.session.enqueueUserMessage(child.prompt, 'queue');
+            child.session.enqueueAgentMessage(child.prompt, 'queue', this);
         }
 
         const manifest = children

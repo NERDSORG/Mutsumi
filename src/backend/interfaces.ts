@@ -7,6 +7,7 @@
  */
 
 import type { ModelSelection } from '../types';
+import type { ToolSet } from '../tools.d/toolSet';
 import type { BackendSession } from './backendSession';
 import type { EventBus } from './eventBus';
 import type { SessionStore } from './sessionStore';
@@ -21,12 +22,21 @@ import type { ApprovalRequestInfo } from './events';
 export type SessionStatus = 'idle' | 'running';
 export type SessionStopReason = 'completed' | 'interrupted' | 'error';
 
+/** Execution policy of a `user`/`agent` inbound item; governs its `@[tool{...}]` calls. */
+export interface InboundExecution {
+    toolSet: ToolSet;
+    skipApproval: boolean;
+}
+
 /**
- * One inbound stimulus for a session: `text` is the source markdown (raw input
- * for `user`/`agent`, injection markdown for `injection`). `kind` decides the
- * committed message's `messageType` tag and its UI card type only.
+ * One inbound stimulus: `text` is source markdown (final markdown for `injection`).
+ * `kind` sets the committed message's `messageType` and its UI card type only.
  */
-export type InboundItem = { kind: 'user' | 'injection' | 'agent'; text: string };
+export type InboundItem = {
+    kind: 'user' | 'injection' | 'agent';
+    text: string;
+    execution?: InboundExecution;
+};
 
 /** An inbound item waiting in the session's run queue. */
 export interface QueuedInbound {
@@ -110,6 +120,8 @@ export interface ApprovalRequestInit {
      * Runs on approval; the returned value becomes the resolution payload.
      */
     onApprove?: () => Promise<unknown>;
+    /** Auto-approve without recording an approval trace (assembly-time calls). */
+    skipApproval?: boolean;
 }
 
 /** How a suspended approval request concluded. */

@@ -24,7 +24,7 @@ import { McpRegistry } from '../tools.d/mcp/registry';
 import { t } from '../i18n';
 import { debugLogger } from '../debugLogger';
 import type { EventBus } from './eventBus';
-import type { SessionStore } from './sessionStore';
+import { MTM_VERSION, type SessionStore } from './sessionStore';
 import type { BackendSession } from './backendSession';
 
 /**
@@ -207,7 +207,7 @@ export class AgentRegistry {
             is_task_finished: false,
             model: selection.model,
             provider: selection.provider,
-            mtm_version: 3,
+            mtm_version: MTM_VERSION,
             sub_agents_list: [],
             contextItems: [{ type: 'macro', key: 'ROLE', content: options.agentType }],
             activeRules: defaults.rules,

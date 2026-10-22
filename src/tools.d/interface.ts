@@ -22,6 +22,8 @@ export interface ToolContext {
      * @param isTaskComplete - Whether this termination represents a successfully completed task (default: false)
      */
     signalTermination: (isTaskComplete?: boolean) => void;
+    /** The call skips approval and leaves no approval trace (assembly-time calls). */
+    skipApproval?: boolean;
 }
 
 export interface ITool {
@@ -51,4 +53,6 @@ export interface ITool {
      * can set this to true to allow result caching.
      */
     shouldCache?: boolean;
+    /** Not executable during context assembly. */
+    assemblyExcluded?: boolean;
 }
