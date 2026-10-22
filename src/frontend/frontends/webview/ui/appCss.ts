@@ -435,6 +435,14 @@ body {
   opacity: 1;
 }
 
+/* A row with neither committed nor active agent content has nothing to copy:
+   hide its row-level agent menu host while the card menus inside the bubble
+   stay. */
+.mutsumi-turn-row:has(> .mutsumi-agent-turn > .mutsumi-committed:empty):has(> .mutsumi-agent-turn > .mutsumi-active:empty)
+  > div:not(.mutsumi-turn-cards):not(.mutsumi-agent-turn) {
+  display: none;
+}
+
 .mutsumi-menu-item {
   display: inline-flex;
   align-items: center;
