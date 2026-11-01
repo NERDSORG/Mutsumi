@@ -94,8 +94,8 @@ jobs:
       - name: Download VSIX artifact
         uses: actions/download-artifact@v6
         with:
+          name: mutsumi-universal
           path: artifacts
-          pattern: mutsumi-universal
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
@@ -104,4 +104,5 @@ jobs:
           name: Mutsumi v${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
-            artifacts/mutsumi-universal/*.vsix
+            artifacts/*.vsix
+          fail_on_unmatched_files: true
